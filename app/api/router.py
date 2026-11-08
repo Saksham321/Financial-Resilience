@@ -4,9 +4,15 @@ Aggregates all domain engine routes into the versioned API tree
 """
 
 from fastapi import APIRouter
+from typing import Annotated
+from fastapi import Depends
+from app.core.dependencies import require_role
+from app.core.metrics import system_metrics
+from app.shared.database.models import User
 from app.api.endpoints.health import router as health_router
 from app.api.endpoints.auth import router as auth_router
 from app.api.endpoints.finance import router as finance_router
+from app.api.endpoints.datasets import router as dataset_router
 
 api_v1_router = APIRouter()
 
@@ -14,14 +20,8 @@ api_v1_router = APIRouter()
 api_v1_router.include_router(health_router)
 api_v1_router.include_router(auth_router)
 api_v1_router.include_router(finance_router)
+api_v1_router.include_router(dataset_router)
 
-# Engine Routers will be mounted here in subsequent phases:
-# - shock_mediation
-# - predictive_planning
-# - behavioral_fraud
-# - subscription_manager
-# - inflation_tracker
-# - expense_pyramid
-# - ai_orchestration
-# - resilience_score
-# - voice
+@api_v1_router.get("/system/metrics", tags=["Health & Diagnostics"])
+async def generate_system_metrics(user: Annotated[User, Depends(require_role("admin"))]):
+    return system_metrics.snapshot()

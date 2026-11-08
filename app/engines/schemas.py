@@ -167,6 +167,7 @@ class SubscriptionInput(Input):
 
 class SummaryInput(Input):
     question: str = Field(default="Explain my financial health, spending habits, runway, shock scenarios, recommendations and contingency plan.", max_length=2000)
+    scenario: ScenarioInput | None = None
 
 
 class Narrative(Input):

@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = Field(default="temporary-development-secret-key-replace-in-production-1234567890")
     ALGORITHM: str = Field(default="HS256")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60)
+    ENABLE_REGISTRATION: bool = False
 
     # Database Configuration (TigerData / TimescaleDB)
     DATABASE_URL: str = Field(
@@ -89,6 +90,7 @@ class Settings(BaseSettings):
     FRAUD_Z_THRESHOLD: float = Field(default=3.0, gt=0)
     JOB_INTERVAL_SECONDS: int = Field(default=3600, ge=10)
     ENABLE_BACKGROUND_JOBS: bool = True
+    SUMMARY_RETENTION_DAYS: int = Field(default=0, ge=0, le=36500)
 
     # Security & Compliance
     CORS_ORIGINS: List[str] = Field(default=["http://localhost:3000", "http://localhost:8501"])

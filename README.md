@@ -16,7 +16,9 @@ if (!(Test-Path .env)) { Copy-Item .env.example .env }
 
 If the environment already exists, reuse it. If `py` is not installed, use your installed Python executable for the first command. The checked-in `.venv` on this machine points to a Python 3.14 installation; virtual environments are machine-specific and should be recreated if that interpreter is unavailable.
 
-Open **http://localhost:8000/** for the dashboard. Register, add your own current account snapshots, import transaction history, and add income/obligation schedules. No demo financial data is seeded. **http://localhost:8000/docs** exposes the API. Stop with Ctrl+C.
+Open **http://localhost:8000/** and search a source account ID (for example, `20111` or `20133`) without signing in. Public sign-up is disabled. Use the optional **Administrator sign in** panel for the explicitly provisioned `admin@tangerine.com` account and authenticated personal tools. **http://localhost:8000/docs** exposes the API. Stop with Ctrl+C.
+
+To provision an administrator on another database, run `python -m scripts.create_admin --email admin@tangerine.com` and enter the chosen password when prompted. This stores only a bcrypt password hash; no default password is embedded in the application. `ENABLE_REGISTRATION=false` is the default. The isolated test fixtures explicitly enable registration only to provision test identities.
 
 The example PostgreSQL URL falls back to local SQLite only if the local database is unreachable. Cloud URLs never silently fall back. To select SQLite explicitly, set `DATABASE_URL=sqlite+aiosqlite:///./financial_resilience.db`. `scripts.migrate` can adopt the original development database after checking its layout, preserving records; back up real financial databases before any deployment migration. Production uses migrations rather than automatic schema creation.
 
@@ -34,6 +36,10 @@ The example PostgreSQL URL falls back to local SQLite only if the local database
 **Accepted offers are local plans, not lender contracts or disbursements.** Conventional credit needs a real underwriting adapter. Merchant cancellations are tracked, not executed. External services never return invented success when unavailable.
 
 ## Data and calculation conventions
+
+The supplied `data/processed` dataset is imported into separate source tables, preserving 4,500 accounts, 185,326 monthly records, and macro insights without changing dashboard records or assuming a currency. See [dataset import instructions](docs/DATA_IMPORT.md) and [the verification report](docs/DATA_IMPORT_REPORT.json).
+
+Additional CSVs in `data/` are loaded with `python -m scripts.import_csv_dataset` and checked with `python -m scripts.verify_csv_dataset`. Their source-file counts and per-account transaction history appear in **Imported dataset** after sign-in. CSV values remain separate from personal banking records.
 
 Account balances are current CAD snapshots. Historical imports do not change them. Update balances manually or through banking sync as money moves. Transactions use negative expenses and positive income; external references deduplicate imports per user. Amounts are Decimal values rounded to cents; no exchange-rate conversion is inferred.
 
@@ -57,6 +63,10 @@ The Node dependency is development-only: jsdom exercises frontend interactions. 
 For production, set a unique `SECRET_KEY`, `ENVIRONMENT=production`, `DEBUG=false`, `USE_LOCAL_FALLBACK_DB=false`, explicit CORS origins, PostgreSQL and HTTPS adapter endpoints. Apply `python -m scripts.migrate` before starting. Use one background worker: disable embedded jobs in multiple API instances and run `python -m app.engines.jobs` separately. SQLite is for local development. Docker Compose remains available with `docker compose up --build`; copy `.env.example` first. Docker builds were not verified in this environment.
 
 ## Audit evidence
+
+The latest [163-function inventory review](docs/FUNCTION_COVERAGE.md) maps the supplied function list to the grouped implementations and records remaining limits. Rebuild it with `node scripts/audit-functions.cjs`.
+
+Platform additions include a durable local transaction-event outbox consumed by the background worker, admin-only `GET /api/v1/system/metrics` (process-local request counts, durations, uptime), and owner-only `DELETE /api/v1/finance/summaries/{id}` (also removes audio). `SUMMARY_RETENTION_DAYS=0` disables automatic deletion; a positive value lets the worker delete generated summaries/audio older than that many days. Source financial records and audit/consent history are retained. `POST /api/v1/finance/summaries` also accepts an optional `scenario` with `amount` and `due_date` to generate verified hypothetical shock analysis and contingency steps without persisting obligations. Database/disk encryption, full retention policy, and live provider verification remain deployment gaps; see the inventory review.
 
 - [Original requirements](docs/REQUIREMENTS.md)
 - [Initial audit](docs/INITIAL_AUDIT.md)

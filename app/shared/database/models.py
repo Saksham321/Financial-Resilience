@@ -146,3 +146,4 @@ class UserConsent(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
 # Register domain metadata for application startup and Alembic.
 import app.engines.models  # noqa: E402,F401
+import app.shared.database.datasets  # noqa: E402,F401

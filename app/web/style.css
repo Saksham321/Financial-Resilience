@@ -2,3 +2,8 @@
 
 /* Bright orange identity, including the sign-in and registration screen. */
 header{background:#f97316;color:#431407}#auth h1{color:#c2410c}#auth .eyebrow{color:#c2410c}#auth form{border-top:5px solid #f97316;background:#fffaf5}#auth button{background:#f97316;color:#431407;width:100%;font-weight:700}#auth button:hover{background:#fb923c}#auth input:focus{outline:2px solid #f97316;outline-offset:2px}input[type=checkbox]{accent-color:#ea580c}
+
+/* Source lookup is public; authenticated personal tools stay out of this flow. */
+body.public-view #data,body.public-view #plans,body.public-view #protection,body.public-view #recurring,body.public-view #purchasing,body.public-view #insights,body.public-view #settings,body.public-view #personal-notifications,body.public-view .personal-link{display:none}#auth{max-width:540px;margin:12px 0 28px}#auth summary{color:#9a3412}#auth form{margin:8px 0}
+
+#pyramid .fill.below{background:#16a34a}#pyramid .fill.near{background:#eab308}#pyramid .fill.over{background:#dc2626}#pyramid .fill.unknown{background:#9ca3af}.pyramid-status{display:inline-block;font-size:12px;margin:4px 0 4px 10px;padding:3px 7px;border-radius:5px}.pyramid-status.below{color:#166534;background:#dcfce7}.pyramid-status.near{color:#713f12;background:#fef9c3}.pyramid-status.over{color:#991b1b;background:#fee2e2}.pyramid-status.unknown{color:#374151;background:#f3f4f6}

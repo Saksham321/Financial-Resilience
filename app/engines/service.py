@@ -200,6 +200,9 @@ async def ingest(db, uid, req):
     if result["elevated_review"]:
         await notify(db, uid, f"fraud:{row.id}", "Transaction needs review", f"Review {row.merchant}: {abs(row.amount)} CAD. This is an anomaly flag, not confirmed fraud.")
     db.add(AuditLog(user_id=uid, event_type="TRANSACTION_INGESTED", details={"transaction_id": str(row.id)}))
+    from app.engines.platform import publish_financial_event
+    await publish_financial_event(db, uid, f"transaction:{row.id}", "transaction_ingested",
+                                  {"transaction_id": str(row.id)})
     # Imported history does not mutate a current balance snapshot. Banking sync replaces snapshots explicitly.
     await refresh(db, uid)
     return row

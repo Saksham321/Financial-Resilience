@@ -9,6 +9,7 @@ from app.shared.database.models import User
 from app.engines.models import Notification
 from app.engines.service import refresh, lock_user
 from app.integrations.providers import adapter
+from app.engines.platform import consume_financial_events, manage_data_retention
 
 
 async def tick():
@@ -18,7 +19,9 @@ async def tick():
         try:
             async with AsyncSessionLocal() as db:
                 await lock_user(db, uid)
-                await refresh(db, uid)
+                if not await consume_financial_events(db, uid):
+                    await refresh(db, uid)
+                await manage_data_retention(db, uid)
                 await db.commit()
                 if settings.NOTIFICATION_API_URL and settings.NOTIFICATION_API_KEY:
                     pending = list((await db.scalars(select(Notification).where(Notification.user_id == uid, Notification.delivery_status != "delivered"))).all())

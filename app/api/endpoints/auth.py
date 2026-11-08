@@ -12,7 +12,7 @@ from app.shared.database.session import get_db
 from app.shared.database.models import User, UserProfile, UserPreference
 from app.shared.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, UserResponse
 from app.core.security import hash_password, verify_password, create_access_token
-from app.core.exceptions import AuthenticationError, DuplicateResourceError
+from app.core.exceptions import AuthenticationError, DuplicateResourceError, AuthorizationError
 from app.core.dependencies import get_current_user
 from app.core.config import settings
 
@@ -23,6 +23,8 @@ async def register(req: RegisterRequest, db: Annotated[AsyncSession, Depends(get
     """
     Registers a new user account, creates default profile and preferences, and returns JWT.
     """
+    if not settings.ENABLE_REGISTRATION:
+        raise AuthorizationError("Public sign-up is disabled. Search by source account ID or use the administrator login.")
     # Check if user already exists
     existing_query = select(User).where(User.email == req.email)
     existing = (await db.execute(existing_query)).scalar_one_or_none()

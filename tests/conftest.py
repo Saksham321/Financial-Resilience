@@ -21,6 +21,13 @@ import app.shared.database.models # noqa
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
+@pytest.fixture(autouse=True)
+def allow_test_identity_provisioning(monkeypatch):
+    # Existing isolated API fixtures provision test users through registration.
+    # The application's default remains disabled; dedicated tests cover that gate.
+    from app.core.config import settings
+    monkeypatch.setattr(settings, 'ENABLE_REGISTRATION', True)
+
 @pytest_asyncio.fixture(scope="function")
 async def test_db_session() -> AsyncGenerator[AsyncSession, None]:
     """Provides an isolated in-memory SQLite database session for tests."""

@@ -1,0 +1,60 @@
+{
+  "verified_at_utc": "2026-11-08T02:03:59.622418+00:00",
+  "dataset_id": "financial_resilience_processed_v1",
+  "database_kind": "sqlite",
+  "tables": {
+    "source_dataset_accounts": 4500,
+    "source_dataset_monthly": 185326,
+    "source_dataset_insights": 1
+  },
+  "all_source_payloads_match": true,
+  "source_manifest": {
+    "accounts_master.parquet": {
+      "sha256": "dd4e50c27997eb6a5f3d60f5ff1181b56d083c1f1c1f45289386600d441cd301",
+      "bytes": 380580
+    },
+    "monthly_summary_compact.parquet": {
+      "sha256": "af0da9b0144b70424d23e53f66acf07bfc8e8c1ab308e78ebb477c3d671ad1b8",
+      "bytes": 4648166
+    },
+    "macro_insights.json": {
+      "sha256": "dae121d19f236e4ac852446fb0469d97591ccc96f6ad70894d3278616466a71b",
+      "bytes": 2121
+    },
+    "counts": {
+      "accounts": 4500,
+      "monthly_records": 185326
+    },
+    "period": {
+      "first": "2020-01",
+      "last": "2025-12"
+    },
+    "currency": "unspecified_in_source_no_conversion"
+  },
+  "unchanged_preexisting_tables": [
+    "users",
+    "system_events",
+    "financial_decisions",
+    "user_consents",
+    "user_profiles",
+    "bank_accounts",
+    "financial_goals",
+    "user_preferences",
+    "privacy_settings",
+    "spending_budgets",
+    "scheduled_flows",
+    "vacations",
+    "chargebacks",
+    "recurring_subscriptions",
+    "shocks",
+    "notifications",
+    "forecast_snapshots",
+    "cpi_observations",
+    "verified_summaries",
+    "ledger_transactions",
+    "installment_offers"
+  ],
+  "backup": "backups/before_csv_import_20261107_205900.db",
+  "currency_converted": false,
+  "user_dashboard_data_populated": false
+}
