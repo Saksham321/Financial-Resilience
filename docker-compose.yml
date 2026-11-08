@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # 1. FastAPI Application
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fre-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=${TIGERDATA_DATABASE_URL:-postgresql+psycopg://postgres:postgres@timescaledb:5432/financial_resilience}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=amqp://guest:guest@rabbitmq:5672//
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_started
+    volumes:
+      - ./app:/app/app
+      - ./migrations:/app/migrations
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 2. TigerData-compatible Local Database (TimescaleDB + PostGIS)
+  timescaledb:
+    image: timescale/timescaledb-ha:pg16
+    container_name: fre-timescaledb
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=financial_resilience
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescale_data:/home/postgres/pgdata/data
+      - ./scripts/init_tigerdata.sql:/docker-entrypoint-initdb.d/init_tigerdata.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d financial_resilience"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 3. Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: fre-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # 4. RabbitMQ Message Broker
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: fre-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+volumes:
+  timescale_data:
+  redis_data:
+  rabbitmq_data:
