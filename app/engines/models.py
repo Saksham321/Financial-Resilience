@@ -118,6 +118,8 @@ class Notification(Base, UUIDPrimaryKeyMixin, TimestampMixin, Owned):
     message: Mapped[str] = mapped_column(String(2000))
     read: Mapped[bool] = mapped_column(Boolean, default=False)
     delivery_status: Mapped[str] = mapped_column(String(30), default="in_app")
+    scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True),index=True)
+    cancelled: Mapped[bool] = mapped_column(Boolean,default=False,nullable=False)
 
 
 class Forecast(Base, UUIDPrimaryKeyMixin, TimestampMixin, Owned):

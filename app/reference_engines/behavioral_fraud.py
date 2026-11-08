@@ -3,17 +3,20 @@ Behavioral Fraud Risk Engine (engine-behavioral-fraud).
 Sheridan Datathon 2026 - Tangerine Track
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Any
+
 import numpy as np
 import pandas as pd
+
 from app.reference_engines.config import FRAUD_CONFIG
 from app.reference_engines.data_loader import DataLoader
 
+
 class BehavioralFraudEngine:
-    def __init__(self, data_loader: Optional[DataLoader] = None):
+    def __init__(self, data_loader: DataLoader | None = None):
         self.dl = data_loader or DataLoader.get_instance()
 
-    def get_user_baseline(self, account_id: int) -> Dict[str, Any]:
+    def get_user_baseline(self, account_id: int) -> dict[str, Any]:
         """
         Builds the 90-day baseline profile:
         - Mean and standard deviation of transaction amounts
@@ -24,21 +27,20 @@ class BehavioralFraudEngine:
         
         if tx.empty:
             return {
-                "mean_cart": 100.0,
-                "std_cart": 50.0,
+                "mean_cart": None,
+                "std_cart": None,
                 "known_merchants": {},
                 "known_operations": set(),
                 "chargebacks_last_3m": 0
             }
 
-        # Last 90 days of transactions (or last 30 rows if sparse)
-        tx_recent = tx.tail(60).copy()
+        # Historical 90-day window anchored to the last recorded transaction.
+        reference=pd.to_datetime(tx['date']).max()
+        tx_recent=tx[pd.to_datetime(tx['date'])>=reference-pd.Timedelta(days=89)].copy()
         amounts = tx_recent["amount"].values.astype(float)
         
-        mean_cart = float(np.mean(amounts)) if len(amounts) > 0 else 100.0
-        std_cart = float(np.std(amounts)) if len(amounts) > 1 else 50.0
-        if std_cart < 5.0:
-            std_cart = 5.0
+        mean_cart = float(np.mean(amounts)) if len(amounts) > 0 else None
+        std_cart = float(np.std(amounts)) if len(amounts) > 1 else None
 
         # Known partner banks / merchants
         merchant_counts = {}
@@ -67,13 +69,13 @@ class BehavioralFraudEngine:
         merchant_name: str,
         category: str = "RETAIL",
         is_new_store: bool = False,
-        recent_browsing_category: Optional[str] = None,
+        recent_browsing_category: str | None = None,
         is_outside_normal_location: bool = False,
         is_outside_budget: bool = False,
         vacation_mode: bool = False,
-        vacation_location: Optional[str] = None,
-        chargebacks_count: Optional[int] = None
-    ) -> Dict[str, Any]:
+        vacation_location: str | None = None,
+        chargebacks_count: int | None = None
+    ) -> dict[str, Any]:
         """
         Executes the behavioral anomaly scoring pipeline according to Section 3 specs:
         1. Base score: 0.50 for all new stores with no transactions.
@@ -121,16 +123,16 @@ class BehavioralFraudEngine:
         # 2. Cart Size Z-Score
         mu = baseline["mean_cart"]
         sigma = baseline["std_cart"]
-        z_score = (amount - mu) / sigma
+        z_score = (amount-mu)/sigma if mu is not None and sigma is not None and sigma>0 else None
         
-        if z_score > FRAUD_CONFIG["cart_z_threshold"]:
+        if z_score is not None and z_score > FRAUD_CONFIG["cart_z_threshold"]:
             anomaly_score += FRAUD_CONFIG["cart_z_anomaly_penalty"]
             scoring_breakdown.append({
                 "factor": "CART_MAGNITUDE_Z_SCORE",
                 "delta": +FRAUD_CONFIG["cart_z_anomaly_penalty"],
                 "detail": f"Cart size ${amount:.2f} is an extreme outlier (Z-Score = {z_score:.2f} > 3.0, mean=${mu:.2f}, σ=${sigma:.2f})."
             })
-        elif z_score > 1.5:
+        elif z_score is not None and z_score > 1.5:
             mod_penalty = 0.10
             anomaly_score += mod_penalty
             scoring_breakdown.append({
@@ -138,6 +140,13 @@ class BehavioralFraudEngine:
                 "delta": +mod_penalty,
                 "detail": f"Cart size higher than typical (Z-Score = {z_score:.2f})."
             })
+
+        if z_score is None:
+            unusual=mu is not None and sigma==0 and amount>3*mu
+            if unusual:anomaly_score+=FRAUD_CONFIG['cart_z_anomaly_penalty']
+            scoring_breakdown.append({'factor':'CART_MAGNITUDE_Z_SCORE' if unusual else 'INSUFFICIENT_AMOUNT_VARIATION',
+                'delta':FRAUD_CONFIG['cart_z_anomaly_penalty'] if unusual else 0,
+                'detail':'A statistical Z-score is unavailable. The hypothetical amount exceeds three times the constant recorded amount.' if unusual else 'Insufficient history or amount variation for a statistical Z-score; no substitute baseline is invented.'})
 
         # 3. Browsing Context Match
         if recent_browsing_category and recent_browsing_category.lower() == category.lower():
@@ -199,13 +208,13 @@ class BehavioralFraudEngine:
             "amount": round(amount, 2),
             "anomaly_score": round(final_score, 3),
             "flag_threshold": threshold,
-            "decision": "FLAG_HIGH_RISK" if is_flagged else "APPROVE_TRANSACTION",
+            "decision": "FLAG_HIGH_RISK" if is_flagged else "BELOW_REVIEW_THRESHOLD",
             "is_flagged": is_flagged,
             "vacation_mode_active": vacation_mode,
             "metrics": {
-                "z_score": round(z_score, 2),
-                "baseline_mean_cart": round(mu, 2),
-                "baseline_std_cart": round(sigma, 2),
+                "z_score": round(z_score, 2) if z_score is not None else None,
+                "baseline_mean_cart": round(mu, 2) if mu is not None else None,
+                "baseline_std_cart": round(sigma, 2) if sigma is not None else None,
                 "recurring_orders_count": recurring_count
             },
             "scoring_breakdown": scoring_breakdown

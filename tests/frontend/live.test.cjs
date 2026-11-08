@@ -21,7 +21,7 @@ test('frontend forms connect to FastAPI and persist real account, transaction an
   await until(async()=>{try{return (await fetch(base+'/health')).ok;}catch{return false;}});
   dom=new JSDOM(fs.readFileSync('app/web/index.html','utf8'),{url:base,runScripts:'outside-only'});
   const w=dom.window;w.setInterval=()=>0;w.fetch=(url,options)=>fetch(base+url,options);w.HTMLElement.prototype.scrollIntoView=function(){};
-  w.eval(fs.readFileSync('app/web/app.js','utf8'));
+  w.eval(fs.readFileSync('app/web/finance-utils.js','utf8')+'\n'+fs.readFileSync('app/web/app.js','utf8')+'\n'+fs.readFileSync('app/web/reference.js','utf8'));
   const submit=f=>f.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));
   assert.equal(w.document.getElementById('register'),null);
   const provision=spawnSync(python,['-m','scripts.create_admin','--email','ui-test@example.com'],{env:serverEnv,input:'TestOnlyPassword123!\n',encoding:'utf8',windowsHide:true});
@@ -33,7 +33,7 @@ test('frontend forms connect to FastAPI and persist real account, transaction an
   let form=w.document.querySelector('#account-form form');
   Object.entries({institution_name:'UI test snapshot',masked_account_number:'****5678',current_balance:'2500',available_balance:'2400'}).forEach(([k,v])=>form.elements[k].value=v);
   submit(form);await until(()=>w.document.getElementById('accounts').textContent.includes('UI test snapshot'));
-  assert.match(w.document.getElementById('metrics').textContent,/2,400/);
+  assert.match(w.document.getElementById('accounts').textContent,/2,400/);
   form=w.document.querySelector('#transaction-form form');
   Object.entries({external_id:'ui-tx-1',occurred_at:new Date(Date.now()-86400000).toISOString().slice(0,16),amount:'-25',merchant:'UI cafe',category:'entertainment'}).forEach(([k,v])=>form.elements[k].value=v);
   submit(form);await until(()=>w.document.getElementById('transactions').textContent.includes('ui cafe'));

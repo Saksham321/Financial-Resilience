@@ -21,7 +21,12 @@ def test_db_url_retains_password_and_normalizes_sqlite(monkeypatch):
     assert 'secret-password' in async_url and 'secret-password' in sync_url
     assert 'psycopg' in async_url and 'sslmode=require' in async_url
     monkeypatch.setattr(session.settings,'DATABASE_URL','sqlite:///local.db')
-    assert session._resolve_database_urls()==('sqlite+aiosqlite:///local.db','sqlite:///local.db')
+    from sqlalchemy.engine import make_url
+    from app.core.config import PROJECT_ROOT
+    async_sqlite,sync_sqlite=session._resolve_database_urls()
+    assert make_url(async_sqlite).drivername=='sqlite+aiosqlite'
+    assert make_url(sync_sqlite).drivername=='sqlite'
+    assert make_url(async_sqlite).database==str((PROJECT_ROOT/'local.db').resolve())
 
 
 def test_bcrypt_utf8_byte_limit():

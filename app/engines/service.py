@@ -3,7 +3,7 @@ import json
 from datetime import date, datetime, timezone, timedelta
 from decimal import Decimal
 from uuid import uuid4
-from sqlalchemy import select, update
+from sqlalchemy import select, update, or_
 from sqlalchemy.exc import IntegrityError
 from fastapi.encoders import jsonable_encoder
 from app.core.config import settings
@@ -20,7 +20,10 @@ def encode(value):
 
 
 def record(row):
-    return encode({c.key: getattr(row, c.key) for c in row.__table__.columns if c.key not in ("audio", "hashed_password")})
+    result=encode({c.key: getattr(row, c.key) for c in row.__table__.columns if c.key not in ("audio", "hashed_password")})
+    if 'audio' in row.__table__.columns:
+        result['audio_available']=row.audio is not None
+    return result
 
 
 async def rows(db, model, uid):
@@ -49,11 +52,13 @@ async def privacy(db, uid):
     return await db.scalar(select(PrivacySetting).where(PrivacySetting.user_id == uid))
 
 
-async def notify(db, uid, key, title, message):
+async def notify(db, uid, key, title, message, scheduled_for=None):
     existing = await db.scalar(select(Notification).where(Notification.user_id == uid, Notification.dedupe_key == key))
     if existing:
+        if scheduled_for is not None and existing.scheduled_for is None:
+            existing.scheduled_for=scheduled_for
         return existing
-    row = Notification(user_id=uid, dedupe_key=key, title=title, message=message)
+    row = Notification(user_id=uid, dedupe_key=key, title=title, message=message,scheduled_for=scheduled_for)
     db.add(row)
     await db.flush()
     return row
@@ -61,7 +66,7 @@ async def notify(db, uid, key, title, message):
 
 async def liquidity(db, uid):
     accounts = await rows(db, BankAccount, uid)
-    return sum((a.available_balance for a in accounts if a.is_active and a.currency == "CAD" and a.account_type in ("CHECKING", "SAVINGS")), ZERO)
+    return sum((a.available_balance for a in accounts if a.is_active and a.currency == "CAD" and a.account_type in ("CHECKING", "SAVINGS","CASH")), ZERO)
 
 
 async def financial_inputs(db, uid):
@@ -93,11 +98,17 @@ async def refresh(db, uid, today=None):
                 setattr(row, k, v)
     await db.flush()
     txs, flows, cancelled = await financial_inputs(db, uid)
+    active_reminders=set()
     for sub in subscriptions:
-        days = (sub.next_billing - today).days
-        if sub.status != "cancelled" and 0 <= days <= 3:
+        if sub.status != "cancelled":
+            key=f"billing:{sub.id}:{sub.next_billing}"
+            active_reminders.add(key)
+            due=datetime.combine(sub.next_billing-timedelta(days=3),datetime.min.time(),tzinfo=timezone.utc)
             await notify(db, uid, f"billing:{sub.id}:{sub.next_billing}", "Upcoming subscription charge",
-                         f"{sub.merchant}: {sub.amount} CAD expected on {sub.next_billing}.")
+                         f"{sub.merchant}: {sub.amount} CAD expected on {sub.next_billing}.",scheduled_for=due)
+    for notice in await rows(db,Notification,uid):
+        if notice.dedupe_key.startswith('billing:'):
+            notice.cancelled=notice.dedupe_key not in active_reminders
     metrics = encode(forecast(txs, await liquidity(db, uid), flows, today, cancelled_merchants=cancelled))
     snapshot = await db.scalar(select(Forecast).where(Forecast.user_id == uid))
     if snapshot is None:
@@ -108,6 +119,10 @@ async def refresh(db, uid, today=None):
     if metrics["zero_date"]:
         await notify(db, uid, f"runway:{metrics['zero_date']}", "Projected liquidity shortfall",
                      f"Available funds are projected to reach zero on {metrics['zero_date']}. Review upcoming obligations.")
+    active_runway=f"runway:{metrics['zero_date']}" if metrics['zero_date'] else None
+    for notice in await rows(db,Notification,uid):
+        if notice.dedupe_key.startswith('runway:'):
+            notice.cancelled=notice.dedupe_key!=active_runway
     await db.flush()
     return metrics
 
@@ -122,11 +137,24 @@ async def dashboard(db, uid):
     subs = await rows(db, Subscription, uid)
     cpi = list((await db.scalars(select(CPI))).all())
     return {"forecast": projection, "pyramid": encode(pyramid(month, income)), "inflation": encode(inflation(txs, cpi)),
-            "subscriptions": [record(s) for s in subs], "subscription_recommendations": subscription_advice(subs),
+            "subscriptions": subscription_records(subs), "subscription_recommendations": subscription_advice(subs),
             "fraud_alerts": [record(t) for t in txs if t.fraud.get("elevated_review")],
-            "notifications": [record(n) for n in await rows(db, Notification, uid)],
+            "notifications": [record(n) for n in (await db.scalars(select(Notification).where(Notification.user_id==uid,
+                Notification.cancelled.is_(False),or_(Notification.scheduled_for.is_(None),Notification.scheduled_for<=datetime.now(timezone.utc))))).all()],
             "shocks": [record(s) for s in await rows(db, Shock, uid)], "offers": [record(o) for o in await rows(db, Offer, uid)],
             "integration_status": integration_status()}
+
+
+def subscription_records(subscriptions):
+    output=[]
+    for sub in subscriptions:
+        peers=[s for s in subscriptions if s.id!=sub.id and s.status!='cancelled' and s.category==sub.category]
+        output.append({**record(sub),'subscription_id':str(sub.id),'merchant_name':sub.merchant,
+            'next_billing_date':sub.next_billing.isoformat(),
+            'notification_scheduled_for':(sub.next_billing-timedelta(days=3)).isoformat(),
+            'overlap_detected':sub.status!='cancelled' and bool(peers),
+            'overlapping_subscription_ids':[str(s.id) for s in peers] if sub.status!='cancelled' else []})
+    return output
 
 
 def integration_status():
@@ -134,19 +162,21 @@ def integration_status():
               for name in ("BANKING", "UNDERWRITING", "BROWSING", "NOTIFICATION")}
     result.update(gemini="configured_unverified" if settings.GEMINI_API_KEY else "requires_credentials",
                   elevenlabs="configured_unverified" if settings.ELEVENLABS_API_KEY else "requires_credentials",
-                  statistics_canada="public_api_available_not_probed", banking_data="manual_snapshots_until_provider_sync",
+                  statistics_canada="public_api_available_not_probed", banking_data="manually_entered_balances",
                   architecture="modular_monolith", lending="planning_only_no_disbursement")
     return result
 
 
 async def ingest(db, uid, req):
     await lock_user(db, uid)
+    from app.engines.categorization import canonical_category
+    req=req.model_copy(update={'category':canonical_category(req.category)})
     existing = await db.scalar(select(Transaction).where(Transaction.user_id == uid, Transaction.external_id == req.external_id))
     if existing:
         if req.category == "unclassified":
-            req = req.model_copy(update={"category": existing.category})
+            req = req.model_copy(update={"category": canonical_category(existing.category)})
         # Retrying the same event is safe; reusing the key for a different event is not.
-        if existing.account_id != req.account_id or existing.amount != req.amount or existing.merchant != req.merchant or existing.category != req.category or existing.occurred_at.replace(tzinfo=timezone.utc) != req.occurred_at:
+        if existing.account_id != req.account_id or existing.amount != req.amount or existing.merchant != req.merchant or canonical_category(existing.category) != req.category or existing.occurred_at.replace(tzinfo=timezone.utc) != req.occurred_at:
             raise ValidationException("Transaction external_id already belongs to a different event")
         return existing
     account = await owned(db, BankAccount, uid, req.account_id)
@@ -155,12 +185,13 @@ async def ingest(db, uid, req):
     pref, geo = await preferences(db, uid), await privacy(db, uid)
     if req.latitude is not None and (not geo or not geo.geolocation_consent):
         raise ValidationException("Geolocation processing requires explicit consent")
-    txs = [t for t in await rows(db, Transaction, uid) if t.occurred_at.replace(tzinfo=timezone.utc) < req.occurred_at]
-    req = req.model_copy(update={"category": classify(req.merchant, req.category, txs)})
+    prior = [t for t in await rows(db, Transaction, uid) if t.occurred_at.replace(tzinfo=timezone.utc) < req.occurred_at]
+    req = req.model_copy(update={"category": classify(req.merchant, req.category, prior)})
+    txs=[t for t in prior if t.occurred_at.replace(tzinfo=timezone.utc)>=req.occurred_at-timedelta(days=90)]
     history = [t for t in txs if t.merchant.casefold() == req.merchant and t.amount < 0]
     history.sort(key=lambda t: t.occurred_at.replace(tzinfo=timezone.utc))
     recurring = 0
-    sequence = history + [req]
+    sequence = sorted([t for t in prior if t.merchant.casefold()==req.merchant and t.amount<0],key=lambda t:t.occurred_at) + [req]
     for a, b in zip(sequence, sequence[1:]):
         days = (b.occurred_at.date() - a.occurred_at.date()).days
         if (28 <= days <= 31 or 364 <= days <= 366) and abs(abs(b.amount) - abs(a.amount)) <= abs(a.amount) * D("0.10"):
@@ -174,8 +205,8 @@ async def ingest(db, uid, req):
             logger.warning("browsing_context_unavailable", user_id=str(uid))
     cbs = [c for c in await rows(db, Chargeback, uid) if add_months(req.occurred_at.date(), -3) <= c.reported_on <= req.occurred_at.date()]
     budgets = await rows(db, Budget, uid)
-    budget = next((b for b in budgets if b.category == req.category), None)
-    spent = sum((-t.amount for t in txs if t.amount < 0 and t.category == req.category and t.occurred_at.strftime("%Y-%m") == req.occurred_at.strftime("%Y-%m")), ZERO)
+    budget = next((b for b in budgets if canonical_category(b.category) == req.category), None)
+    spent = sum((-t.amount for t in txs if t.amount < 0 and canonical_category(t.category) == req.category and t.occurred_at.strftime("%Y-%m") == req.occurred_at.strftime("%Y-%m")), ZERO)
     outside, vacation = False, None
     if geo and geo.geolocation_consent and req.latitude is not None:
         vacations = await rows(db, Vacation, uid)
@@ -190,9 +221,22 @@ async def ingest(db, uid, req):
     weights = {"new": settings.FRAUD_NEW_MERCHANT, "familiar": settings.FRAUD_FAMILIAR_MERCHANT,
                "recurring": settings.FRAUD_RECURRING_MULTIPLIER, "browsing": settings.FRAUD_BROWSING_REDUCTION,
                "chargeback": settings.FRAUD_CHARGEBACK_INCREMENT, "geography": settings.FRAUD_GEOGRAPHY_INCREMENT,
-               "budget": settings.FRAUD_BUDGET_INCREMENT, "review": settings.FRAUD_REVIEW_THRESHOLD}
+               "budget": settings.FRAUD_BUDGET_INCREMENT, "review": settings.FRAUD_REVIEW_THRESHOLD,
+               "unfamiliar_category":settings.FRAUD_CATEGORY_INCREMENT,"unusual_time":settings.FRAUD_TIME_INCREMENT,
+               "unusual_cart":settings.FRAUD_CART_INCREMENT}
+    baseline=[t for t in txs if t.amount<0]
+    categories={canonical_category(t.category) for t in baseline}
     result = anomaly(req.amount, history, recurring, match, len(cbs), outside,
-                     bool(budget and spent + abs(req.amount) > budget.monthly_amount), req.cart_size, req.occurred_at.hour, weights, settings.FRAUD_Z_THRESHOLD) if req.amount < 0 else {"score": 0, "elevated_review": False, "confirmed_fraud": False, "reasons": []}
+                     bool(budget and spent + abs(req.amount) > budget.monthly_amount), req.cart_size, req.occurred_at.hour, weights, settings.FRAUD_Z_THRESHOLD,
+                     category_unusual=len(baseline)>=6 and req.category not in categories,baseline_history=baseline) if req.amount < 0 else {"score": 0, "elevated_review": False, "confirmed_fraud": False, "reasons": []}
+    result['baseline_window_days']=90
+    result['baseline_transaction_count']=len(baseline)
+    from collections import Counter
+    result['behavioral_profile']={'window_start':(req.occurred_at-timedelta(days=90)).isoformat(),
+        'window_end':req.occurred_at.isoformat(),
+        'category_distribution':dict(Counter(canonical_category(t.category) for t in baseline)),
+        'hour_distribution_utc':dict(Counter(str(t.occurred_at.hour) for t in baseline)),
+        'geographic_history_count':sum(t.latitude is not None for t in baseline) if geo and geo.geolocation_consent else 0}
     result.update(warnings=warnings, category_familiarity_count=sum(t.category == req.category for t in txs), geography_evaluated=bool(geo and geo.geolocation_consent and req.latitude is not None))
     row = Transaction(user_id=uid, **req.model_dump(), vacation_id=vacation.id if vacation else None, fraud=encode(result))
     db.add(row)
@@ -272,9 +316,14 @@ async def generate_offers(db, uid, shock):
     for months in (3, 6, 12):
         capacity = await repayment_capacity(db, uid, shock, months)
         terms = installment(shock.shortfall, D(str(settings.INSTALLMENT_FEE)), D(str(settings.INSTALLMENT_ANNUAL_RATE)), months)
-        terms.update(affordable=terms["payment"] <= capacity, monthly_capacity=capacity, planning_only=True)
+        if terms['payment']>capacity:
+            continue
+        terms.update(affordable=True, monthly_capacity=capacity, planning_only=True)
         db.add(Offer(user_id=uid, shock_id=shock.id, months=months, terms=encode(terms), status="proposed", expires_on=date.today() + timedelta(days=7)))
     await db.flush()
+    available=await db.scalar(select(Offer.id).where(Offer.shock_id==shock.id).limit(1))
+    if available is None:
+        shock.routing={**shock.routing,'offers_status':'no_affordable_plan','message':'No 3/6/12-month payment fits projected capacity. Review expenses or obtain qualified assistance.'}
 
 
 async def repayment_capacity(db, uid, shock, months):

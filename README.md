@@ -1,5 +1,17 @@
 # Financial Resilience Engine
 
+**Built with**
+
+![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-D71F00?logo=sqlalchemy&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
+![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript&logoColor=black)
+![HTML5](https://img.shields.io/badge/HTML5-E34F26?logo=html5&logoColor=white)
+![CSS3](https://img.shields.io/badge/CSS3-1572B6?logo=css&logoColor=white)
+![pandas](https://img.shields.io/badge/pandas-150458?logo=pandas&logoColor=white)
+
 FastAPI application with a same-origin HTML/JavaScript dashboard, SQLAlchemy persistence, deterministic financial calculations, JWT authentication, and optional external integrations. The existing modular monolith is preserved; this is not eight independently deployed microservices.
 
 ## Run locally on Windows
@@ -16,7 +28,7 @@ if (!(Test-Path .env)) { Copy-Item .env.example .env }
 
 If the environment already exists, reuse it. If `py` is not installed, use your installed Python executable for the first command. The checked-in `.venv` on this machine points to a Python 3.14 installation; virtual environments are machine-specific and should be recreated if that interpreter is unavailable.
 
-Open **http://localhost:8000/** and search a source account ID (for example, `20111` or `20133`) without signing in. Public sign-up is disabled. Use the optional **Administrator sign in** panel for the explicitly provisioned `admin@tangerine.com` account and authenticated personal tools. **http://localhost:8000/docs** exposes the API. Stop with Ctrl+C.
+Open **http://127.0.0.1:8000/** and search a historical source account ID without signing in. No password is required for historical information, monthly history, transactions or source-account analysis. The administrator sign-in remains optional for admin summaries, the full account directory and personal tools. Public sign-up is disabled. **http://localhost:8000/docs** exposes the API. Stop with Ctrl+C.
 
 To provision an administrator on another database, run `python -m scripts.create_admin --email admin@tangerine.com` and enter the chosen password when prompted. This stores only a bcrypt password hash; no default password is embedded in the application. `ENABLE_REGISTRATION=false` is the default. The isolated test fixtures explicitly enable registration only to provision test identities.
 
@@ -36,6 +48,8 @@ The example PostgreSQL URL falls back to local SQLite only if the local database
 **Accepted offers are local plans, not lender contracts or disbursements.** Conventional credit needs a real underwriting adapter. Merchant cancellations are tracked, not executed. External services never return invented success when unavailable.
 
 ## Data and calculation conventions
+
+Local configuration is read from the project-root `.env`, and relative SQLite database paths resolve from the project root. Starting the IDE or Python from another directory therefore does not create an empty replacement database. The populated local database is `financial_resilience.db`. Imported records live in `source_dataset_*` tables; empty personal `bank_accounts` or `ledger_transactions` tables do not mean the imported dataset is missing. Use source-account ID search to view imported accounts.
 
 The supplied `data/processed` dataset is imported into separate source tables, preserving 4,500 accounts, 185,326 monthly records, and macro insights without changing dashboard records or assuming a currency. See [dataset import instructions](docs/DATA_IMPORT.md) and [the verification report](docs/DATA_IMPORT_REPORT.json).
 
@@ -64,6 +78,8 @@ For production, set a unique `SECRET_KEY`, `ENVIRONMENT=production`, `DEBUG=fals
 
 ## Audit evidence
 
+The [requirement completion report](docs/REQUIREMENT_COMPLETION.md) documents the new specification APIs, supervised classification, rolling fraud baselines, durable billing jobs, four-quarter inflation, normalized pyramid, automatic Gemini-to-ElevenLabs handoff, and optional separate engine entrypoints. Run `python -m scripts.check_integrations` to see which live-provider settings still need configuration.
+
 The latest [technical specification compliance review](docs/SPEC_COMPLIANCE_REVIEW.md) checks the newly supplied architecture document requirement by requirement and identifies remaining algorithm, API-contract, category, configuration, and live-integration gaps.
 
 The [supplied project comparison](docs/REFERENCE_PROJECT_COMPARISON.md) documents the new **Resilience toolkit** for selected source accounts, including benchmark values, shock controls, lending examples, predictive plans, subscriptions, inflation, fraud simulation, goal/backup plans and voice. [Exact calculation comparisons](docs/REFERENCE_PARITY_REPORT.json) cover seven reference accounts and 35 scenario combinations. Source search and admin-only lists retain their existing behavior.
@@ -76,3 +92,5 @@ Platform additions include a durable local transaction-event outbox consumed by 
 - [Initial audit](docs/INITIAL_AUDIT.md)
 - [Final requirement checklist](docs/FINAL_CHECKLIST.md)
 - [Implementation report](docs/IMPLEMENTATION_REPORT.md)
+
+The [dashboard revision report](docs/DASHBOARD_REVISIONS.md) maps the admin and client PDF pages to the implementation, formulas, tests and remaining verification limits. Admin personal tools are grouped in a collapsed workspace and do not modify source records.

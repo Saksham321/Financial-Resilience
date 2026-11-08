@@ -1,0 +1,49 @@
+# Optional overlay: docker compose -f docker-compose.yml -f docker-compose.engines.yml --profile engines up --build
+# Apply python -m scripts.migrate centrally before starting these services in production.
+x-engine: &engine
+  build: .
+  command: ["uvicorn", "app.services:create_service", "--factory", "--host", "0.0.0.0", "--port", "8000"]
+  env_file: [.env]
+  profiles: [engines]
+  depends_on:
+    timescaledb:
+      condition: service_healthy
+x-engine-environment: &environment
+  DATABASE_URL: ${TIGERDATA_DATABASE_URL:-postgresql+psycopg://postgres:postgres@timescaledb:5432/financial_resilience}
+  ENABLE_BACKGROUND_JOBS: "false"
+services:
+  api:
+    environment:
+      ENABLE_BACKGROUND_JOBS: "false"
+  engine-shock-mediation:
+    <<: *engine
+    ports: ["8011:8000"]
+    environment: {<<: *environment, SERVICE_NAME: shock}
+  engine-predictive-plan:
+    <<: *engine
+    ports: ["8012:8000"]
+    environment: {<<: *environment, SERVICE_NAME: predictive}
+  engine-behavioral-fraud:
+    <<: *engine
+    ports: ["8013:8000"]
+    environment: {<<: *environment, SERVICE_NAME: fraud}
+  engine-subscription-mgr:
+    <<: *engine
+    ports: ["8014:8000"]
+    environment: {<<: *environment, SERVICE_NAME: subscriptions, ENABLE_BACKGROUND_JOBS: "true"}
+  engine-inflation-tracker:
+    <<: *engine
+    ports: ["8015:8000"]
+    environment: {<<: *environment, SERVICE_NAME: inflation}
+  engine-expense-pyramid:
+    <<: *engine
+    ports: ["8016:8000"]
+    environment: {<<: *environment, SERVICE_NAME: pyramid}
+  engine-gemini-integration:
+    <<: *engine
+    ports: ["8017:8000"]
+    environment: {<<: *environment, SERVICE_NAME: gemini}
+  engine-elevenlabs-integration:
+    <<: *engine
+    ports: ["8018:8000"]
+    environment: {<<: *environment, SERVICE_NAME: voice}

@@ -1,113 +1,161 @@
-/* Read-only source-account toolkit. All strings render through textContent. */
+/* Selected-account analysis. Request versions and aborts prevent stale financial content. */
 'use strict';
-let reviewAccount=null,reviewVersion=0,reviewData=null,reviewScenario={scenario_id:'LAID_OFF_EI'},reviewAudioUrl=null;
-const reviewValue=v=>v===null||v===undefined?'Unavailable':typeof v==='number'?sourceNumber(v):String(v);
-function reviewFields(id,object){table(id,Object.entries(object||{}).map(([name,value])=>({name:name.replaceAll('_',' '),value})),[['Metric','name'],['Value','value']]);}
+let reviewAccount=null,reviewVersion=0,reviewData=null,reviewScenario={scenario_id:'LAID_OFF_EI'},reviewAudioUrl=null,reviewAbort=null;
+
+const dismissedNotices=new Set();
+const reviewAmount=v=>FinanceUI.amount(v,reviewData?.profile.currency_code);
+const reviewValue=v=>v===null||v===undefined?'Unavailable':typeof v==='number'?FinanceUI.number(v):String(v);
+function reviewFields(id,object){table(id,Object.entries(object||{}).map(([name,value])=>({name:FinanceUI.label(name),value})),[['Metric','name'],['Value','value']]);}
+const reviewContainers=['custom-goals','custom-goal-status','review-profile','review-loan','review-metrics','review-all-metrics','review-orders','review-shock-cards','review-comparison','review-mediation','review-credit','review-installments','review-pyramid','review-pyramid-values','review-trend','review-trend-chart','review-projections','review-actions','review-subscriptions','review-inflation-context','review-inflation-summary','review-inflation-alerts','review-inflation','review-fraud-score','review-fraud-factors','review-summary-text','review-goal','review-backup','review-audio','review-error','recommendations'];
+function clearReviewAudio(){FinanceUI.stopAudio();$('review-audio').replaceChildren();if(reviewAudioUrl)URL.revokeObjectURL(reviewAudioUrl);reviewAudioUrl=null;}
 function resetReferenceReview(){
- reviewVersion++;reviewAccount=null;reviewData=null;reviewScenario={scenario_id:'LAID_OFF_EI'};
- $('source-review').hidden=true;$('review-external-consent').checked=false;
- for(const id of ['review-profile','review-metrics','review-all-metrics','review-orders','review-shock-cards','review-comparison','review-mediation','review-credit','review-installments','review-pyramid','review-pyramid-values','review-trend','review-trend-chart','review-projections','review-actions','review-subscription-metrics','review-subscription-alerts','review-subscriptions','review-inflation-summary','review-inflation-alerts','review-inflation','review-fraud-score','review-fraud-factors','review-summary-text','review-goal','review-backup','review-audio','review-error'])$(id).replaceChildren();
- stopReviewSpeech();if(reviewAudioUrl)URL.revokeObjectURL(reviewAudioUrl);reviewAudioUrl=null;
+ if(typeof hideCustomerManagement==='function')hideCustomerManagement();
+ reviewAbort?.abort();reviewVersion++;reviewAccount=null;reviewData=null;reviewScenario={scenario_id:'LAID_OFF_EI'};
+ $('source-review').hidden=false;$('review-analysis').hidden=true;$('toolkit-selected').textContent='No account selected.';$('review-external-consent').checked=false;$('review-scenario').reset();$('review-fraud').reset();$('custom-goal-form').reset();
+ clearReviewAudio();reviewContainers.forEach(id=>$(id).replaceChildren());$('account-notifications').replaceChildren();$('account-notifications').hidden=true;
 }
 window.resetReferenceReview=resetReferenceReview;
 async function loadReferenceReview(id,scenario={scenario_id:'LAID_OFF_EI'}){
- const version=++reviewVersion,activeToken=token;reviewAccount=id;reviewScenario=scenario;
- $('source-review').hidden=false;$('review-context').textContent='Loading reference analysis for source account '+id+'…';
- $('review-error').replaceChildren();
- try{
-  const value=await api('source-review/'+id+'/simulate','POST',scenario);
-  if(version!==reviewVersion||token!==activeToken)return;
-  reviewData=value;renderReferenceReview(value);
- }catch(error){if(version===reviewVersion)$('review-error').replaceChildren(el('p',error.message,'notice error'));}
+ reviewAbort?.abort();reviewAbort=new AbortController();const version=++reviewVersion,activeToken=token;
+ const switching=reviewAccount!==id;if(switching)$('review-external-consent').checked=false;
+ reviewAccount=id;reviewScenario=scenario;reviewData=null;clearReviewAudio();reviewContainers.forEach(key=>$(key).replaceChildren());
+ $('account-notifications').replaceChildren();$('account-notifications').hidden=true;$('source-review').hidden=false;$('review-analysis').hidden=false;$('toolkit-selected').textContent='Selected account: '+FinanceUI.mask(id);
+ $('review-context').textContent='Loading historical account analysis…';$('source-review').setAttribute('aria-busy','true');
+ try{const value=await api('source-review/'+id+'/simulate','POST',scenario,false,reviewAbort.signal);
+  if(version!==reviewVersion||token!==activeToken)return;reviewData=value;renderReferenceReview(value);renderCustomGoals();
+ }catch(error){if(version===reviewVersion&&error.name!=='AbortError'){$('review-context').textContent='Account analysis unavailable.';$('review-error').replaceChildren(el('p',error.message,'notice error'));}}
+ finally{if(version===reviewVersion)$('source-review').setAttribute('aria-busy','false');}
 }
 window.loadReferenceReview=loadReferenceReview;
+function attachReviewAudio(blob){clearReviewAudio();reviewAudioUrl=URL.createObjectURL(blob);const audio=el('audio');audio.controls=true;audio.src=reviewAudioUrl;audio.onplay=()=>FinanceUI.stopAudio(audio);$('review-audio').replaceChildren(audio);}
 function renderReviewBriefing(value){
- $('review-briefing-source').textContent='Summary source: '+value.source+(value.external_error?' · External service unavailable: '+value.external_error:'');
- $('review-summary-text').replaceChildren(el('p',value.summary_text));
- reviewFields('review-goal',Object.fromEntries(Object.entries(value.goal_plan).filter(([k])=>k!=='action_steps')));
- for(const step of value.goal_plan.action_steps)$('review-goal').append(el('p',step));
- reviewFields('review-backup',Object.fromEntries(Object.entries(value.backup_plan).filter(([k])=>k!=='immediate_actions')));
- for(const step of value.backup_plan.immediate_actions)$('review-backup').append(el('p',step));
+ clearReviewAudio();$('review-briefing-source').textContent='Summary source: '+(value.source.startsWith('GEMINI_')?'Gemini, grounded in selected facts':'Account-based calculation')+(value.external_error?' · External service unavailable; showing local summary.':'');
+ $('review-summary-text').replaceChildren(el('p',value.summary_text));const g=value.goal_plan,b=value.backup_plan;
+ reviewFields('review-goal',{'Reserve target (four months)':reviewAmount(g.target_emergency_fund),'Recorded closing balance':reviewAmount(g.current_buffer),'Remaining target':reviewAmount(g.remaining_target),'Aspirational monthly contribution':reviewAmount(g.aspirational_monthly_savings),'Currently affordable monthly contribution':reviewAmount(g.monthly_savings),'Every two weeks (26 payments/year)':reviewAmount(g.biweekly_savings),'Budget improvement required for aspiration':reviewAmount(g.required_monthly_budget_improvement),'Months at affordable contribution':g.target_months_to_complete??'Not reachable with current contribution'});
+ for(const step of g.action_steps)$('review-goal').append(el('p',step));
+ reviewFields('review-backup',{'Hypothetical monthly cash-flow improvement':reviewAmount(b.estimated_monthly_cashflow_improvement),'Scenario balance at 90 days':reviewAmount(b.baseline_balance_90),'Balance with 30% Savings cut at 90 days':reviewAmount(b.improved_balance_90),'Runway gain (days)':b.projected_runway_gain_days??'No finite difference within model horizon'});
+ for(const step of b.immediate_actions)$('review-backup').append(el('p',step));if(b.horizon_note)$('review-backup').append(el('p',b.horizon_note,'muted'));
+ if(value.audio_base64){const bytes=Uint8Array.from(atob(value.audio_base64),c=>c.charCodeAt(0));attachReviewAudio(new Blob([bytes],{type:'audio/mpeg'}));}
+ else if(value.audio_error)$('review-audio').replaceChildren(el('p','Summary ready; audio unavailable. '+value.audio_error,'notice'));
+}
+function showNotificationPanel(host){host.querySelector('.notification-empty')?.remove();if(!host.querySelector('.notification'))host.append(el('p','No active notifications for this account.','notification-empty'));host.hidden=false;}
+function renderNotices(r){const host=$('account-notifications');host.replaceChildren();
+ for(const n of r.subscriptions.notifications||[]){const key=r.account_id+':'+n.id;if(dismissedNotices.has(key))continue;const item=el('div',undefined,'notification');item.append(el('strong',n.title),el('span',n.message),button('Dismiss',()=>{dismissedNotices.add(key);item.remove();showNotificationPanel(host);}));host.append(item);}showNotificationPanel(host);
 }
 function renderReferenceReview(r){
- const m=r.metrics,s=r.shock,p=r.pyramid,pred=r.predictive;
- $('review-context').textContent=`Source account ${r.account_id} · historical data through ${r.as_of} · source units, currency unspecified. Reference examples are simulations and do not change your accounts.`;
- reviewFields('review-profile',r.profile);
- datasetCards('review-metrics',[['Monthly money in (I)',reviewValue(m.typical_income_I)],['Fixed costs (F)',reviewValue(m.typical_fixed_costs_F)],['Monthly spending (S)',reviewValue(m.typical_spending_S)],['Savings buffer (B)',reviewValue(m.savings_buffer_B)],['Baseline runway (months)',reviewValue(m.baseline_runway_months)],['Net monthly cash flow',reviewValue(m.net_monthly_cashflow)],['Savings rate',m.savings_rate_pct+'%']]);
- reviewFields('review-all-metrics',m);table('review-orders',r.standing_orders,[['Order','order_id'],['Bank','to_bank'],['Amount','amount'],['Purpose','purpose']]);
+ if(!r?.profile)throw Error('Account analysis returned an invalid response. Reload the page and try again.');
+ const hasFinancialHistory=r.availability?.financial_history??Boolean(r.metrics&&r.shock&&r.pyramid&&r.predictive);
+ if(hasFinancialHistory&&!r.pyramid?.actual_percent)throw Error('The running application server is out of date. Restart the server, then refresh this page to load the updated account analysis.');
+ const m=r.metrics,s=r.shock,p=r.pyramid,pred=r.predictive,profile=r.profile;
+ $('financial-context-label').textContent='HISTORICAL ACCOUNT ANALYSIS';
+ $('toolkit-selected').textContent='Selected account: '+FinanceUI.mask(r.account_id);
+ $('review-context').textContent='Account '+FinanceUI.mask(r.account_id)+' · imported historical data through '+(r.as_of||'unavailable')+' · '+r.currency+'. Simulations do not change banking records.';
+ reviewFields('review-profile',{'Account':FinanceUI.mask(profile.account_id),'Client':FinanceUI.mask(profile.client_id),'Birth date':profile.birth_date?'••••-••-••':'Unavailable','Opened':profile.account_opened?String(profile.account_opened).slice(0,4)+' (month and day masked)':'Unavailable','Region':profile.region?'Restricted location (masked)':'Unavailable','Customer profile':FinanceUI.label(profile.archetype),'Loan record':profile.has_loan?'Present':'None recorded','Cards':(profile.cards||[]).map(c=>FinanceUI.label(c.card_type)+' '+FinanceUI.mask(c.card_id)).join('; ')||'None recorded'});
+ $('review-profile').append(el('p',profile.archetype_explanation,'notice'));
+ if(profile.loan){const l=profile.loan;$('review-profile').append(el('h4','Loan details'));reviewFields('review-loan',{'Loan':FinanceUI.mask(l.loan_id),'Principal':reviewAmount(l.amount),'Monthly payment':reviewAmount(l.monthly_payment),'Term (months)':l.duration_months,'Start date':l.loan_start||'Unavailable','Active at recorded snapshot':l.is_active_end_2025?'Yes':'No','Recorded status':({A:'Repaid',B:'Default recorded',C:'Active',D:'Distress recorded'})[l.status]||FinanceUI.label(l.status)});
+ const statusGuide=el('div',undefined,'loan-status-guide');statusGuide.append(el('h4','Loan status definitions'));
+ for(const [code,meaning] of [['A','Loan finished and repaid without problems.'],['B','Loan finished with an unpaid balance or repayment default.'],['C','Loan is active and repayments are proceeding normally.'],['D','Loan is active with overdue repayments or outstanding repayment debt.']]){const note=el('p');note.append(el('strong','Status '+code+': '),document.createTextNode(meaning));statusGuide.append(note);}
+ statusGuide.append(el('p','These statuses describe the recorded historical snapshot, not necessarily the borrower?s current situation.','muted'));$('review-loan').append(statusGuide);}
+ if(!hasFinancialHistory){$('review-error').append(el('p','Complete monthly history is unavailable. Financial estimates are withheld.','notice'));renderReviewBriefing(r.briefing);return;}
+ table('review-orders',r.standing_orders,[['Recorded order',v=>FinanceUI.mask(v.order_id)],['Purpose','purpose'],['Monthly amount',v=>reviewAmount(v.amount)]]);
+ const metrics=[['Monthly income',reviewAmount(m.typical_income_I),'Median of recorded monthly money in.'],['Fixed costs',reviewAmount(m.typical_fixed_costs_F),'Median of household bills, insurance and loan payments.'],['Monthly spending',reviewAmount(m.typical_spending_S),'Median of recorded monthly money out.'],['Savings buffer',reviewAmount(m.savings_buffer_B),'Mean daily balance over the last six recorded months; not a current balance.'],['Baseline runway',typeof m.baseline_runway_months==='number'?FinanceUI.number(m.baseline_runway_months)+' months':'No ongoing shortfall','Constant-cost benchmark: mean daily buffer divided by spending minus income; capped at 120 months.'],['Net monthly cash flow',reviewAmount(m.net_monthly_cashflow),'Median income minus median spending.'],['Savings rate',m.typical_income_I>0?FinanceUI.percent(m.savings_rate_pct):'Unavailable: zero income','Net monthly cash flow divided by median income.']];
+ datasetCards('review-metrics',metrics);[...$('review-metrics').children].forEach((card,i)=>{card.title=metrics[i][2];card.append(el('small',metrics[i][2],'muted'));});
+ $('review-metrics').children[5].classList.add(m.net_monthly_cashflow<0?'negative':'positive');
+ reviewFields('review-all-metrics',{'Last recorded month':m.latest_month,'Recorded closing balance':reviewAmount(m.latest_balance),'Household bills H (median; shock bill changes apply here)':reviewAmount(m.household_bills_H),'Active loan payment P (recorded active at end of 2025)':reviewAmount(m.loan_payment_P),'Days below zero (last six months)':m.recent_days_below_zero});
+ const guide=el('details');guide.append(el('summary','Runway scenario guide'));for(const benchmark of r.scenario_benchmarks||[]){guide.append(el('p',benchmark.scenario_title+': '+(typeof benchmark.post_shock.runway_months==='number'?FinanceUI.number(benchmark.post_shock.runway_months)+' months':'No ongoing shortfall')+'. '+benchmark.scenario_description+' Constant-cost benchmark using the six-month average buffer.'));}$('review-all-metrics').append(guide);
  $('review-shock-title').textContent=s.scenario_title+' · '+s.scenario_description;
- datasetCards('review-shock-cards',[['Post-shock runway (months)',reviewValue(s.post_shock.runway_months)],['Resilience tier',s.post_shock.resilience_tier],['Monthly shortfall',reviewValue(s.post_shock.monthly_gap)],['Remaining buffer',reviewValue(s.post_shock.buffer_left)]]);
- table('review-comparison',[
-  {metric:'Monthly income',baseline:s.baseline.income,shock:s.post_shock.income},
-  {metric:'Monthly spending',baseline:s.baseline.spending,shock:s.post_shock.spending},
-  {metric:'Buffer',baseline:s.baseline.buffer,shock:s.post_shock.buffer_left},
-  {metric:'Monthly gap',baseline:-s.baseline.net_monthly,shock:s.post_shock.monthly_gap},
-  {metric:'Runway (months)',baseline:s.baseline.runway,shock:s.post_shock.runway_months},
-  ...Object.entries(s.shock_parameters).map(([metric,value])=>({metric:metric.replaceAll('_',' '),baseline:'—',shock:value}))
- ],[['Metric','metric'],['Baseline','baseline'],['With shock','shock'],['Change',r=>typeof r.baseline==='number'&&typeof r.shock==='number'?sourceNumber(r.shock-r.baseline):'—']]);
- const parameters=s.shock_parameters,form=$('review-scenario');
- for(const key of ['income_reduction_pct','bills_increase_pct','one_off_costs','shock_duration_months'])form.elements[key].value=parameters[key];
- for(const slider of form.querySelectorAll('input[type=range]'))slider.value=form.elements[slider.dataset.field].value;
- $('review-mediation').replaceChildren(el('p',r.mediation.status+' · modeled shock '+r.mediation.shock_amount+'; buffer '+r.mediation.liquid_buffer+'; shortfall '+r.mediation.shortfall_amount));
- reviewFields('review-credit',r.mediation.credit_evaluation);
- if(r.mediation.line_of_credit_proposal){$('review-credit').append(el('h4','Modeled line of credit'));const host=el('pre',JSON.stringify(r.mediation.line_of_credit_proposal,null,2));$('review-credit').append(host);}
- table('review-installments',r.mediation.installment_proposal?.plans||[],[['Term (months)','term_months'],['Monthly installment','monthly_installment'],['Total repayment','total_repayable'],['Example revenue','projected_bank_revenue'],['APR %','apr'],['Fee structure','fee_structure'],['Description','description']]);
- $('review-pyramid').replaceChildren();
- for(const key of ['peak','middle','base']){
-  const actual=p.user_pyramid_ratios[key+'_pct'],target=p.ideal_pyramid_ratios[key+'_pct'];
-  $('review-pyramid').append(el('p',key.toUpperCase()+': '+reviewValue(p.user_pyramid_amounts[key+'_cad'])+' source units · '+actual+'% / target '+target+'%'));
-  const bar=el('div',undefined,'bar'),fill=el('div',undefined,'fill'),marker=el('div',undefined,'target');
-  fill.style.width=Math.min(100,Math.max(0,actual))+'%';fill.style.background=actual>target?'#dc2626':target-actual<=5?'#eab308':'#16a34a';marker.style.left=target+'%';bar.append(fill,marker);$('review-pyramid').append(bar);
- }
- reviewFields('review-pyramid-values',{status:p.visual_status,deformity_score:p.deformity_score,inverted:p.is_inverted,total_monthly_spending:p.total_monthly_spending,typical_monthly_income:p.typical_monthly_income,reallocation:p.proposed_rearrangement,reallocation_amount:p.rearrangement_amount_cad});
- reviewFields('review-trend',{...pred.forecast,projections_30_60_90:undefined,...pred.spending_breakdown});
- const monthly=reviewData?pred.forecast.projections_30_60_90:[];
- drawReferenceTrend(monthly,m.latest_balance);
- table('review-projections',monthly,[['Days','horizon_days'],['Date','target_date'],['Projected monthly outflow','projected_monthly_outflow'],['Projected balance','projected_balance']]);
- table('review-actions',pred.action_plan,[['Action','message'],['Category','category'],['Reduction',v=>(v.target_reduction_pct*100)+'%'],['Monthly saving','monthly_savings_cad'],['Reference runway gain (days)','projected_runway_extension_days']]);
+ datasetCards('review-shock-cards',[['Estimated coverage at constant costs',typeof s.post_shock.runway_months==='number'?FinanceUI.number(s.post_shock.runway_months)+' months':'No ongoing shortfall'],['Resilience tier',FinanceUI.label(s.post_shock.resilience_tier)],['Monthly shortfall',reviewAmount(Math.max(0,s.post_shock.monthly_gap))],['Average balance after one-time expenses',reviewAmount(s.post_shock.buffer_left)]]);
+ const tierCard=$('review-shock-cards').children[1];tierCard.classList.add('resilience-tier-card');
+ $('review-shock-cards').append(el('p','Based on the average buffer and ongoing monthly gap. Daily projections below also model recovery after the selected duration.','notice'));
+ const tierGuide=el('details',undefined,'resilience-tier-guide');tierGuide.append(el('summary','What each resilience tier means'));
+ for(const [tier,meaning] of [['Critical risk','Fewer than 2 months of modeled shortfall covered, or the buffer is exhausted.'],['High vulnerability','At least 2 but fewer than 6 months of modeled shortfall covered.'],['Moderate resilience','At least 6 but fewer than 12 months of modeled shortfall covered.'],['Strong resilience','At least 12 months of modeled shortfall covered, or no ongoing monthly shortfall.']]){const note=el('p');note.append(el('strong',tier+': '),document.createTextNode(meaning));tierGuide.append(note);}
+ tierGuide.append(el('p','Tiers use the six-month average buffer after one-off costs and the selected scenario?s ongoing monthly shortfall. They are model estimates, not guarantees; daily projections also account for recovery after the selected duration.','muted'));$('review-shock-cards').append(tierGuide);
+ table('review-comparison',[{metric:'Monthly income',baseline:s.baseline.income,shock:s.post_shock.income},{metric:'Monthly spending',baseline:s.baseline.spending,shock:s.post_shock.spending},{metric:'Mean daily buffer after one-off cost',baseline:s.baseline.buffer,shock:s.post_shock.buffer_left},{metric:'Monthly net cash flow',baseline:s.baseline.net_monthly,shock:-s.post_shock.monthly_gap}],[['Metric','metric'],['Baseline',v=>reviewAmount(v.baseline)],['With shock',v=>reviewAmount(v.shock)],['Change',v=>reviewAmount(v.shock-v.baseline)]]);
+ $('review-presets').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.scenario===s.scenario_id)));
+ const form=$('review-scenario');for(const key of ['income_reduction_pct','bills_increase_pct','one_off_costs','shock_duration_months'])form.elements[key].value=s.shock_parameters[key];syncSliders();
+ const med=r.mediation;if(Number(med.shortfall_amount)>0){const warning=el('div',undefined,'notice error');warning.setAttribute('role','alert');warning.append(el('strong','Financial shortfall detected'),el('p','Recorded available savings may not cover the estimated scenario cost. Shortfall: '+reviewAmount(med.shortfall_amount)+'. Historical risk signal: '+FinanceUI.label(med.credit_evaluation.risk_tier)+'. Review costs, commitments and affordability; this does not establish loan eligibility.'));$('review-mediation').append(warning);}$('review-mediation').append(el('p',med.message),el('p','Modeled total funding need '+reviewAmount(med.shock_amount)+' · recorded closing balance '+reviewAmount(med.liquid_buffer)+' · shortfall '+reviewAmount(med.shortfall_amount)));
+ const cr=med.credit_evaluation;reviewFields('review-credit',{'Historical risk signal':FinanceUI.label(cr.risk_tier),'Illustrative lending criteria':cr.credit_eligible?'Historical criteria met; approval required':'Historical criteria not met','Recent overdraft days':cr.recent_days_below_zero});
+ for(const reason of cr.disqualification_reasons)$('review-credit').append(el('p',reason,'warning'));
+ if(med.line_of_credit_proposal){const l=med.line_of_credit_proposal;$('review-credit').append(el('p','Hypothetical revolving example: modeled limit '+reviewAmount(l.modeled_limit)+', initial draw '+reviewAmount(l.estimated_initial_draw)+', annual interest '+FinanceUI.percent(l.apr)+', minimum monthly payment '+reviewAmount(l.min_monthly_payment)+'. Uncovered shortfall '+reviewAmount(l.uncovered_shortfall)+'. No approval or payoff date is established.'));}
+ table('review-installments',med.installment_proposal?.plans||[],[['Term (months)','term_months'],['Principal',v=>reviewAmount(v.principal)],['Monthly payment',v=>reviewAmount(v.monthly_installment)],['Final payment',v=>reviewAmount(v.final_installment)],['Fee',v=>reviewAmount(v.fee_structure.amount)],['Interest rate',v=>FinanceUI.percent(v.annual_interest_rate_percent)],['Fee-inclusive APR',v=>FinanceUI.percent(v.apr)],['Total repayment',v=>reviewAmount(v.total_repayable)]]);
+ $('review-installments').append(el('p','APR is the annualized monthly internal rate of return on actual cent-rounded payments and net funds advanced, including financed fees. Actual regulated disclosures may use different conventions.','muted'));
+ drawAllocation(p);
+ if(pred.available){const f=pred.forecast;reviewFields('review-trend',{'Recorded closing date':f.reference_date,'Starting balance':reviewAmount(f.initial_balance),'Selected scenario runway (days)':f.current_runway_days??'No depletion within 365 days','Estimated zero-balance date':f.projected_zero_date??'Not reached within 365 days','Monthly spending trend':FinanceUI.label(f.trend_direction),'Monthly spending change (CAD)':FinanceUI.number(f.trend_slope)});$('review-trend').append(el('p',f.assumptions,'muted'));
+ drawReferenceTrend(f.projections_30_60_90,f.initial_balance,f.reference_date);
+ table('review-projections',f.projections_30_60_90,[['Days after closing','horizon_days'],['Projection date','target_date'],['Modeled monthly outflow',v=>reviewAmount(v.projected_monthly_outflow)],['Baseline balance',v=>reviewAmount(v.projected_balance)],['Selected scenario balance',v=>reviewAmount(v.scenario_balance)]]);
+ table('review-actions',pred.action_plan,[['Illustrative spending reduction',v=>FinanceUI.percent(v.target_reduction_pct*100)],['Estimated monthly saving',v=>reviewAmount(v.monthly_savings_cad)],['Scenario balance at 90 days',v=>reviewAmount(v.baseline_balance_90)],['Improved balance at 90 days',v=>reviewAmount(v.improved_balance_90)],['Effect on financial coverage','message']]);
+ }else $('review-trend').append(el('p',pred.reason,'notice'));
  const subs=r.subscriptions;
- datasetCards('review-subscription-metrics',[['Recurring entries',subs.total_active_subscriptions],['Monthly recurring spend',reviewValue(subs.total_monthly_recurring_spend)],['Illustrative annual savings',reviewValue(subs.total_potential_annual_savings)]]);
- table('review-subscription-alerts',subs.overlap_alerts,[['Category','category'],['Severity','severity'],['Services','services'],['Monthly spend','total_monthly_spend'],['Potential monthly savings','potential_monthly_savings'],['Potential annual savings','potential_annual_savings'],['Trigger','action_trigger'],['Recommendation','message']]);
- table('review-subscriptions',subs.subscriptions,[['Entry','merchant_name'],['Origin','data_origin'],['Category','category'],['Amount','amount'],['Cadence','cadence'],['Example next bill','next_billing_date'],['Example reminder','notification_scheduled_for'],['Overlap','overlap_detected']]);
- const inf=r.inflation;reviewFields('review-inflation-summary',{...inf.summary,benchmark_cpi_period:inf.benchmark_cpi_period,period_cpi_increase_pct:inf.period_cpi_increase_pct});
- table('review-inflation-alerts',inf.active_alerts,[['Alert','title'],['Severity','severity'],['Details','message']]);
- table('review-inflation',inf.trailing_quarters,[['Quarter','quarter'],['Nominal income','nominal_money_in'],['Nominal expenses','nominal_money_out'],['Real income','real_money_in'],['Real expenses','real_money_out'],['CPI','cpi_index'],['Real income growth %','real_income_qoq_pct'],['Real expense growth %','real_expenses_qoq_pct']]);
- renderReviewBriefing(r.briefing);$('review-assumptions').replaceChildren(...r.assumptions.map(t=>el('p',t)));
+ table('review-subscriptions',subs.subscriptions,[['Entry','merchant_name'],['Origin',v=>FinanceUI.label(v.data_origin)],['Amount',v=>reviewAmount(v.amount)],['Cadence',v=>FinanceUI.label(v.cadence)],['Estimated payment date (historical)','next_billing_date'],['Estimated reminder date (historical)','notification_scheduled_for']]);
+ const inf=r.inflation;$('review-inflation-context').append(...Object.entries(inf.provenance).map(([k,v])=>el('p',FinanceUI.label(k)+': '+v)));
+ reviewFields('review-inflation-summary',{'Comparison quarter':inf.summary.latest_quarter,'CPI reference month':inf.benchmark_cpi_period,'CPI Increase (%)':FinanceUI.percent(inf.period_cpi_increase_pct),'Illustrative real net flow':reviewAmount(inf.summary.latest_real_net_flow),'Illustrative trend':FinanceUI.label(inf.summary.purchasing_power_trend)});
+ table('review-inflation-alerts',inf.active_alerts,[['Illustrative risk','title'],['Severity',v=>FinanceUI.label(v.severity)],['Details','message']]);
+ table('review-inflation',inf.trailing_quarters,[['Quarter','quarter'],['Nominal income',v=>reviewAmount(v.nominal_money_in)],['Nominal expenses',v=>reviewAmount(v.nominal_money_out)],['Illustrative real income',v=>reviewAmount(v.real_money_in)],['Illustrative real expenses',v=>reviewAmount(v.real_money_out)],['CPI index',v=>FinanceUI.number(v.cpi_index)],['Real income growth',v=>FinanceUI.percent(v.real_income_qoq_pct)],['Real expense growth',v=>FinanceUI.percent(v.real_expenses_qoq_pct)]]);
+ renderReviewBriefing(r.briefing);renderNotices(r);textList('recommendations',[...p.recommendations,...pred.action_plan.map(a=>a.message)]);$('review-assumptions').replaceChildren(...r.assumptions.map(t=>el('p',t)));
 }
-function drawReferenceTrend(projections,balance){
- const host=$('review-trend-chart');host.replaceChildren();const values=[Number(balance),...projections.map(p=>p.projected_balance)];
- const min=Math.min(0,...values),max=Math.max(1,...values),ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox','0 0 440 180');svg.setAttribute('role','img');svg.setAttribute('aria-label','Reference balance projection: latest balance, 30, 60 and 90 days');
- const line=document.createElementNS(ns,'polyline');line.setAttribute('points',values.map((v,i)=>(30+i*125)+','+(135-(v-min)/(max-min)*110)).join(' '));line.setAttribute('fill','none');line.setAttribute('stroke','#c2410c');line.setAttribute('stroke-width','3');svg.append(line);
- values.forEach((v,i)=>{const label=document.createElementNS(ns,'text');label.setAttribute('x',String(15+i*125));label.setAttribute('y','164');label.setAttribute('font-size','11');label.textContent=['Latest','30 days','60 days','90 days'][i];svg.append(label);});host.append(svg);
+function svgNode(tag,attrs={},text){const n=document.createElementNS('http://www.w3.org/2000/svg',tag);for(const [k,v] of Object.entries(attrs))n.setAttribute(k,v);if(text!==undefined)n.textContent=text;return n;}
+function drawAllocation(p,hostId='review-pyramid',valuesId='review-pyramid-values',format=reviewAmount){const host=$(hostId);host.replaceChildren();const svg=svgNode('svg',{viewBox:'0 0 600 300',role:'img','aria-label':'Expense allocation pyramid; Savings 20%, Wants 30%, Needs 50% targets'});
+ const keys=['peak','middle','base'],colors={peak:'#2563eb',middle:'#a855f7',base:'#f59e0b',unclassified:'#64748b'};
+ const shares=keys.map(key=>Math.max(0,Number(p.actual_percent[key])||0));
+ const unknown=Math.max(0,100-shares.reduce((sum,value)=>sum+value,0));
+ const total=shares.reduce((sum,value)=>sum+value,0)+unknown;
+ let cumulative=0;
+ const point=(fraction,side)=>[300+side*295*Math.sqrt(fraction),8+280*Math.sqrt(fraction)].join(',');
+ svg.setAttribute('aria-label','Expense allocation pyramid sized by actual spending shares: '+keys.map((key,i)=>FinanceUI.label(key)+' '+FinanceUI.percent(p.actual_percent[key])).join(', '));
+ for(const [i,key] of keys.entries()){const actual=p.actual_percent[key],target=p.target_percent[key],state=FinanceUI.threshold(actual,target);
+ const start=cumulative/total;cumulative+=shares[i];const end=cumulative/total;
+ const polygon=svgNode('polygon',{points:[point(start,-1),point(start,1),point(end,1),point(end,-1)].join(' '),fill:colors[key],stroke:'#fff','stroke-width':3,'data-allocation':key});
+ polygon.append(svgNode('title',{},FinanceUI.label(key)+': '+format(p.totals[key])+'; '+FinanceUI.percent(actual)+' of spending; target '+target+'%'));svg.append(polygon);
+ const height=280*(Math.sqrt(end)-Math.sqrt(start));
+ if(height>=24){const top=8+280*Math.sqrt(start);const labelY=top+height*(start===0?.65:.5);const label=svgNode('text',{x:300,y:labelY,'text-anchor':'middle',fill:key==='base'?'#17212b':'white','font-size':15,'font-weight':700});
+ if(height>=44){label.append(svgNode('tspan',{x:300,dy:0},FinanceUI.label(key)),svgNode('tspan',{x:300,dy:18},FinanceUI.percent(actual)));}
+ else label.textContent=FinanceUI.label(key)+' '+FinanceUI.percent(actual);
+ svg.append(label);}
+ const line=el('div',undefined,'allocation-row');line.append(el('strong',FinanceUI.label(key)),el('span',format(p.totals[key])+' · '+FinanceUI.percent(actual)+' of spending / target '+target+'%'));const bar=el('div',undefined,'bar'),fill=el('div',undefined,'fill '+state),mark=el('div',undefined,'target');bar.dataset.status=state;fill.style.width=Math.min(100,Number(actual||0))+'%';mark.style.left=target+'%';bar.append(fill,mark);line.append(bar);host.append(line);}
+ if(unknown>0){const start=cumulative/total;const polygon=svgNode('polygon',{points:[point(start,-1),point(start,1),point(1,1),point(1,-1)].join(' '),fill:colors.unclassified,stroke:'#fff','stroke-width':3});polygon.append(svgNode('title',{},'Unclassified: '+FinanceUI.percent(unknown)));svg.append(polygon);}
+ const legend=el('ul',undefined,'pyramid-legend');legend.setAttribute('aria-label','Pyramid colour legend');
+ for(const [key,label] of [['peak','Savings'],['middle','Wants'],['base','Needs'],['unclassified','Unclassified ? spending purpose unknown']]){const item=el('li');const swatch=el('span',undefined,'pyramid-swatch');swatch.style.backgroundColor=colors[key];swatch.setAttribute('aria-hidden','true');item.append(swatch,document.createTextNode(label));legend.append(item);}
+ host.prepend(svg,legend);
+ reviewFields(valuesId,{'Allocation assessment':p.visual_status,'Deformity score (0–100)':p.deformity_score??'Unavailable: incomplete categories','Total monthly spending (trailing average)':format(p.total_spending),'Unclassified spending':format(p.unclassified_total),'Period':p.period,'Potential Savings reduction to 20% of reduced total':format(p.reallocation_amount)});if(p.warning)$(valuesId).append(el('p',p.warning,'warning'));$(valuesId).append(el('p',p.score_method,'muted'));
 }
-const presets=[['LAID_OFF_EI','Job loss: EI 55%'],['FURNACE_REPAIR','Emergency repair: one month of spending'],['LAID_OFF_AND_BILLS_UP','Double shock: EI 55% + bills 15%'],['INFLATION_STAGNATION','Cost of living: income −10%, bills +25%']];
-for(const [id,title] of presets)$('review-presets').append(button(title,async()=>{if(reviewAccount===null)throw Error('Find a source account first.');await loadReferenceReview(reviewAccount,{scenario_id:id});}));
-$('review-scenario').onsubmit=e=>{e.preventDefault();action(e.currentTarget.querySelector('button'),async()=>{
- const values=Object.fromEntries(new FormData($('review-scenario')));await loadReferenceReview(reviewAccount,{scenario_id:'CUSTOM',income_reduction_pct:Number(values.income_reduction_pct)/100,bills_increase_pct:Number(values.bills_increase_pct)/100,one_off_costs:Number(values.one_off_costs),shock_duration_months:Number(values.shock_duration_months)});
-});};
-for(const slider of $('review-scenario').querySelectorAll('input[type=range]')){
- slider.oninput=()=>{$('review-scenario').elements[slider.dataset.field].value=slider.value;};
- slider.onchange=()=>{$('review-scenario').requestSubmit();};
+function drawReferenceTrend(projections,balance,reference,hostId='review-trend-chart',format=reviewAmount,code=reviewData?.profile.currency_code||'CAD'){const host=$(hostId);host.replaceChildren();const baseline=[Number(balance),...projections.map(p=>Number(p.projected_balance))],scenario=[Number(balance)-Number(reviewData?.shock?.shock_parameters.one_off_costs||0),...projections.map(p=>Number(p.scenario_balance))];const min=Math.min(0,...baseline,...scenario),max=Math.max(1,...baseline,...scenario),y=v=>240-(v-min)/(max-min)*160;
+ const svg=svgNode('svg',{viewBox:'0 0 760 340',role:'img','aria-label':'Savings and Balance Projection, historical closing balance and modeled balances 30, 60 and 90 days later'});svg.append(svgNode('title',{},'Savings and Balance Projection'),svgNode('text',{x:380,y:28,'text-anchor':'middle','font-size':20,'font-weight':700},'Savings and Balance Projection'));for(const v of [min,(min+max)/2,max]){svg.append(svgNode('line',{x1:115,x2:710,y1:y(v),y2:y(v),stroke:'#cbd5e1'}),svgNode('text',{x:110,y:y(v)+4,'text-anchor':'end','font-size':12},FinanceUI.number(v)));}
+ for(const [values,color,label] of [[baseline,'#c2410c','Baseline'],[scenario,'#1d4ed8','Selected scenario']]){svg.append(svgNode('polyline',{points:values.map((v,i)=>(135+i*180)+','+y(v)).join(' '),stroke:color,'stroke-width':3,fill:'none'}));values.forEach((v,i)=>{const point=svgNode('circle',{cx:135+i*180,cy:y(v),r:5,fill:color,tabindex:0});point.append(svgNode('title',{},label+' · '+[reference,...projections.map(p=>p.target_date)][i]+' · '+format(v)));svg.append(point);});}
+ ['Closing',...projections.map(p=>p.horizon_days+' days')].forEach((v,i)=>{svg.append(svgNode('text',{x:135+i*180,y:267,'text-anchor':'middle','font-size':13},v),svgNode('text',{x:135+i*180,y:285,'text-anchor':'middle','font-size':11},[reference,...projections.map(p=>p.target_date)][i]));});svg.append(svgNode('line',{x1:115,x2:115,y1:70,y2:240,stroke:'#64748b'}),svgNode('line',{x1:115,x2:710,y1:240,y2:240,stroke:'#64748b'}),svgNode('text',{x:18,y:160,transform:'rotate(-90 18 160)','text-anchor':'middle','font-size':14,'font-weight':600},'Account balance ('+code+')'),svgNode('text',{x:410,y:322,'text-anchor':'middle','font-size':14,'font-weight':600},'Days after recorded closing date (0 = '+reference+')'));host.append(svg,el('p','Orange: baseline · Blue: selected shock. Historical model projections, not current balances. Hover or focus chart values for amounts.','muted'));
 }
-$('review-fraud').onsubmit=e=>{e.preventDefault();action(e.currentTarget.querySelector('button'),async()=>{
- const f=$('review-fraud').elements,id=reviewAccount,version=reviewVersion;
- const body={amount:Number(f.amount.value),merchant_name:f.merchant_name.value,category:f.category.value,
-  is_new_store:f.is_new_store.checked,is_outside_normal_location:f.is_outside_normal_location.checked,is_outside_budget:f.is_outside_budget.checked,vacation_mode:f.vacation_mode.checked,vacation_location:f.vacation_location.value||null,
-  recent_browsing_category:f.browsing_match.checked?f.category.value:null,chargebacks_count:f.chargebacks_count.value===''?null:Number(f.chargebacks_count.value)};
- const result=await api('source-review/'+id+'/fraud','POST',body);if(version!==reviewVersion||id!==reviewAccount)return;
- reviewFields('review-fraud-score',{anomaly_score:result.anomaly_score,threshold:result.flag_threshold,simulation_result:result.is_flagged?'Needs review':'Below review threshold',...result.metrics,vacation_mode:result.vacation_mode_active,assumptions:result.assumptions});
- table('review-fraud-factors',result.scoring_breakdown,[['Factor','factor'],['Adjustment','delta'],['Reason','detail']]);
-});};
-$('review-summary').onclick=()=>action($('review-summary'),async()=>{
- const id=reviewAccount,version=reviewVersion,result=await api('source-review/'+id+'/briefing','POST',{...reviewScenario,allow_external_processing:$('review-external-consent').checked});
- if(id===reviewAccount&&version===reviewVersion){reviewData.briefing=result;renderReviewBriefing(result);}
-});
-function stopReviewSpeech(){if('speechSynthesis' in window)window.speechSynthesis.cancel();$('review-audio').querySelectorAll('audio').forEach(a=>a.pause());}
-$('review-speak').onclick=()=>action($('review-speak'),async()=>{if(!reviewData)throw Error('Select an account first.');if(!('speechSynthesis' in window))throw Error('This browser does not support speech. Use ElevenLabs audio if configured.');stopReviewSpeech();const speech=new SpeechSynthesisUtterance(reviewData.briefing.summary_text);speech.rate=1;speech.pitch=1;window.speechSynthesis.speak(speech);});
+const presets=[['LAID_OFF_EI','Job loss: hypothetical EI 55%'],['FURNACE_REPAIR','Emergency repair: one month of spending'],['LAID_OFF_AND_BILLS_UP','Double shock: hypothetical EI 55% + bills 15%'],['INFLATION_STAGNATION','Cost of living: income −10%, bills +25%']];
+for(const [id,title] of presets){const preset=button(title,async()=>{if(reviewAccount===null)throw Error('Select an account first.');await loadReferenceReview(reviewAccount,{scenario_id:id});});preset.dataset.scenario=id;preset.setAttribute('aria-pressed','false');$('review-presets').append(preset);}
+function syncSliders(){for(const slider of $('review-scenario').querySelectorAll('input[type=range]')){const value=$('review-scenario').elements[slider.dataset.field].value;if(slider.dataset.field==='one_off_costs')slider.max=Math.max(25000,Number(value));slider.value=value;}}
+$('review-scenario').onsubmit=e=>{e.preventDefault();action(e.currentTarget.querySelector('button'),async()=>{if(reviewAccount===null)throw Error('Select an account first.');if(!$('review-scenario').reportValidity())return;const values=Object.fromEntries(new FormData($('review-scenario')));await loadReferenceReview(reviewAccount,{scenario_id:'CUSTOM',income_reduction_pct:Number(values.income_reduction_pct)/100,bills_increase_pct:Number(values.bills_increase_pct)/100,one_off_costs:Number(values.one_off_costs),shock_duration_months:Number(values.shock_duration_months)});});};
+for(const slider of $('review-scenario').querySelectorAll('input[type=range]')){slider.oninput=()=>{$('review-scenario').elements[slider.dataset.field].value=slider.value;};const number=$('review-scenario').elements[slider.dataset.field];number.oninput=()=>{if(slider.dataset.field==='one_off_costs')slider.max=Math.max(25000,Number(number.value));slider.value=number.value;};}
+$('change-account').onclick=()=>{resetReferenceReview();datasetFilter='';datasetSelected=null;datasetDetailVersion++;datasetTransactionVersion++;$('dataset-detail-panel').hidden=true;$('dataset-history').replaceChildren();$('dataset-transactions').replaceChildren();const input=$('dataset-search').elements.account_id;input.focus();input.select();$('dataset-search').scrollIntoView({block:'center',behavior:'smooth'});};
+$('review-fraud').onsubmit=e=>{e.preventDefault();action(e.currentTarget.querySelector('button'),async()=>{if(!reviewData)throw Error('Wait for account analysis to load.');const f=$('review-fraud').elements,id=reviewAccount,version=reviewVersion;
+ const body={amount:Number(f.amount.value),merchant_name:f.merchant_name.value,category:f.category.value,is_new_store:f.is_new_store.checked,is_outside_normal_location:f.is_outside_normal_location.checked,is_outside_budget:f.is_outside_budget.checked,vacation_mode:f.vacation_mode.checked,vacation_location:f.vacation_location.value||null,recent_browsing_category:f.browsing_match.checked?f.category.value:null,chargebacks_count:f.chargebacks_count.value===''?null:Number(f.chargebacks_count.value)};
+ const result=await api('source-review/'+id+'/fraud','POST',body);if(version!==reviewVersion||id!==reviewAccount)return;reviewFields('review-fraud-score',{'Hypothetical anomaly score':FinanceUI.number(result.anomaly_score),'Review threshold':FinanceUI.number(result.flag_threshold),'Simulation result':result.is_flagged?'Needs review':'Below review threshold','Vacation Mode':result.vacation_mode_active?'Enabled':'Disabled'});$('review-fraud-score').append(el('p',result.assumptions));table('review-fraud-factors',result.scoring_breakdown,[['Factor',v=>FinanceUI.label(v.factor)],['Adjustment',v=>FinanceUI.number(v.delta)],['Reason','detail']]);});};
+$('review-summary').onclick=()=>action($('review-summary'),async()=>{if(!reviewData)throw Error('Wait for account analysis to load.');const id=reviewAccount,version=reviewVersion,result=await api('source-review/'+id+'/briefing','POST',{...reviewScenario,allow_external_processing:$('review-external-consent').checked,generate_audio:$('review-auto-audio').checked,profile:$('review-voice-profile').value});if(id===reviewAccount&&version===reviewVersion){reviewData.briefing=result;renderReviewBriefing(result);}});
+function stopReviewSpeech(){FinanceUI.stopAudio();}
+$('review-speak').onclick=()=>action($('review-speak'),async()=>{if(!reviewData)throw Error('Select an account first.');if(!('speechSynthesis' in window))throw Error('Browser speech is unavailable.');stopReviewSpeech();const speech=new SpeechSynthesisUtterance(reviewData.briefing.summary_text);speech.rate=1;speech.onend=()=>message('Speech finished.');speech.onerror=()=>message('Speech could not finish.',true);window.speechSynthesis.speak(speech);});
 $('review-stop').onclick=stopReviewSpeech;
-$('review-cloud-audio').onclick=()=>action($('review-cloud-audio'),async()=>{
- if(!$('review-external-consent').checked)throw Error('Enable external processing before requesting ElevenLabs audio.');
- const id=reviewAccount,version=reviewVersion,blob=await api('source-review/'+id+'/audio','POST',{...reviewScenario,allow_external_processing:true,profile:'professional',summary_text:reviewData.briefing.summary_text},true);
- if(id!==reviewAccount||version!==reviewVersion)return;
- if(reviewAudioUrl)URL.revokeObjectURL(reviewAudioUrl);reviewAudioUrl=URL.createObjectURL(blob);const audio=el('audio');audio.controls=true;audio.src=reviewAudioUrl;$('review-audio').replaceChildren(audio);
-});
+$('review-cloud-audio').onclick=()=>action($('review-cloud-audio'),async()=>{if(!reviewData)throw Error('Select an account first.');if(!$('review-external-consent').checked)throw Error('Enable external processing before requesting ElevenLabs audio.');const id=reviewAccount,version=reviewVersion,blob=await api('source-review/'+id+'/audio','POST',{...reviewScenario,allow_external_processing:true,profile:$('review-voice-profile').value,summary_text:reviewData.briefing.summary_text},true);if(id===reviewAccount&&version===reviewVersion)attachReviewAudio(blob);});
+
+
+function customGoalKey(){return 'resilience-goals:v1:'+encodeURIComponent(email||'visitor')+':'+reviewAccount;}
+function readCustomGoals(){const goals=JSON.parse(localStorage.getItem(customGoalKey())||'[]');return Array.isArray(goals)?goals.filter(g=>typeof g.name==='string'&&g.name.trim()&&[g.target,g.saved,g.monthly].every(v=>Number.isFinite(v)&&v>=0)&&g.target>0):[];}
+function renderCustomGoals(){
+ const host=$('custom-goals');host.replaceChildren();$('custom-goal-form').reset();delete $('custom-goal-form').dataset.editIndex;
+ if(reviewAccount===null)return;
+ let goals;try{goals=readCustomGoals();}catch(error){$('custom-goal-status').textContent='Saved goals could not be loaded. Browser storage may be unavailable.';return;}
+ if(!goals.length){host.append(el('p','No savings goals have been added. Create a goal using the form above.','muted'));return;}
+ goals.forEach((goal,index)=>{const card=el('div',undefined,'card');const remaining=Math.max(0,goal.target-goal.saved),months=remaining===0?0:goal.monthly>0?Math.ceil(Math.round(remaining*100)/Math.round(goal.monthly*100)):null;
+ card.append(el('h4',goal.name),el('p',FinanceUI.amount(goal.saved,'CAD')+' saved of '+FinanceUI.amount(goal.target,'CAD')));
+ const progress=el('progress');progress.max=goal.target;progress.value=Math.min(goal.saved,goal.target);progress.setAttribute('aria-label',goal.name+' savings progress');card.append(progress,el('p','Remaining: '+FinanceUI.amount(remaining,'CAD')+' ? Monthly contribution: '+FinanceUI.amount(goal.monthly,'CAD')),el('p',months===0?'Savings target achieved.':months===null?'Set a monthly contribution to estimate completion.':'Estimated time to goal: '+months+' month'+(months===1?'':'s')+'.'));
+ card.append(button('Edit goal',()=>{const form=$('custom-goal-form');for(const key of ['name','target','saved','monthly'])form.elements[key].value=goal[key];form.dataset.editIndex=String(index);form.elements.name.focus();}));host.append(card);});
+ delete $('custom-goal-form').dataset.editIndex;
+}
+function validateGoalAmounts(form){let valid=true;for(const key of ['target','saved','monthly']){const input=form.elements[key],ok=/^\d+(?:\.\d{1,2})?$/.test(input.value);input.setCustomValidity(ok?'':'Enter an amount with at most two decimal places (for example, 125.50).');if(!ok)valid=false;}return valid;}
+for(const key of ['target','saved','monthly']){const input=$('custom-goal-form').elements[key];input.oninput=()=>input.setCustomValidity('');input.onblur=()=>{if(/^\d+(?:\.\d{1,2})?$/.test(input.value))input.value=Number(input.value).toFixed(2);};}
+$('custom-goal-form').onsubmit=e=>{e.preventDefault();const form=e.currentTarget;const amountsValid=validateGoalAmounts(form);if(reviewAccount===null||!form.reportValidity()||!amountsValid)return;
+ const goal={name:form.elements.name.value.trim(),target:Number(form.elements.target.value),saved:Number(form.elements.saved.value),monthly:Number(form.elements.monthly.value)};
+ if(!goal.name||![goal.target,goal.saved,goal.monthly].every(v=>Number.isFinite(v)&&v>=0&&v<=1e9)||goal.target<=0)return;
+ try{const goals=readCustomGoals();if(form.dataset.editIndex!==undefined)goals[Number(form.dataset.editIndex)]=goal;else goals.push(goal);localStorage.setItem(customGoalKey(),JSON.stringify(goals));renderCustomGoals();$('custom-goal-status').textContent='Savings goal saved in this browser.';}catch(error){$('custom-goal-status').textContent='Goal could not be saved. Browser storage may be unavailable.';}
+};

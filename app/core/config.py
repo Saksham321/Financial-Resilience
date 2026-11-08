@@ -3,14 +3,16 @@ Application Configuration Core
 Pydantic v2 Settings for Financial Resilience Engine
 """
 
-from typing import List, Optional
+from pathlib import Path
+
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-import os
+
+PROJECT_ROOT=Path(__file__).resolve().parents[2]
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=PROJECT_ROOT / ".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore"
@@ -52,33 +54,33 @@ class Settings(BaseSettings):
     CELERY_RESULT_BACKEND: str = Field(default="redis://localhost:6379/1")
 
     # Google Gemini AI Integration
-    GEMINI_API_KEY: Optional[str] = Field(default=None)
+    GEMINI_API_KEY: str | None = Field(default=None)
     GEMINI_MODEL_NAME: str = Field(default="gemini-2.0-flash")
     GEMINI_REQUEST_TIMEOUT_SECONDS: int = Field(default=30)
     GEMINI_MAX_RETRIES: int = Field(default=3)
 
     # ElevenLabs Voice Integration
-    ELEVENLABS_API_KEY: Optional[str] = Field(default=None)
+    ELEVENLABS_API_KEY: str | None = Field(default=None)
     ELEVENLABS_VOICE_ID: str = Field(default="21m00Tcm4TlvDq8ikWAM")
 
     # External APIs
     STATSCAN_API_BASE_URL: str = Field(default="https://www150.statcan.gc.ca/t1/wds/rest")
     BANKING_PROVIDER_MOCK_MODE: bool = Field(default=True)
-    BANKING_API_URL: Optional[str] = None
-    BANKING_API_KEY: Optional[str] = None
-    UNDERWRITING_API_URL: Optional[str] = None
-    UNDERWRITING_API_KEY: Optional[str] = None
-    BROWSING_API_URL: Optional[str] = None
-    BROWSING_API_KEY: Optional[str] = None
-    NOTIFICATION_API_URL: Optional[str] = None
-    NOTIFICATION_API_KEY: Optional[str] = None
+    BANKING_API_URL: str | None = None
+    BANKING_API_KEY: str | None = None
+    UNDERWRITING_API_URL: str | None = None
+    UNDERWRITING_API_KEY: str | None = None
+    BROWSING_API_URL: str | None = None
+    BROWSING_API_KEY: str | None = None
+    NOTIFICATION_API_URL: str | None = None
+    NOTIFICATION_API_KEY: str | None = None
     INTEGRATION_TIMEOUT_SECONDS: float = Field(default=20, gt=0, le=120)
     INTEGRATION_RETRIES: int = Field(default=2, ge=0, le=5)
-    ELEVENLABS_EMPATHETIC_VOICE_ID: Optional[str] = None
+    ELEVENLABS_EMPATHETIC_VOICE_ID: str | None = None
     ELEVENLABS_MODEL_ID: str = "eleven_multilingual_v2"
     STATSCAN_CPI_VECTOR: int = 41690973
-    INSTALLMENT_ANNUAL_RATE: Optional[float] = Field(default=None, ge=0, le=100)
-    INSTALLMENT_FEE: Optional[float] = Field(default=None, ge=0)
+    INSTALLMENT_ANNUAL_RATE: float | None = Field(default=None, ge=0, le=100)
+    INSTALLMENT_FEE: float | None = Field(default=None, ge=0)
     FRAUD_NEW_MERCHANT: float = Field(default=0.50, ge=0, le=1)
     FRAUD_FAMILIAR_MERCHANT: float = Field(default=0.50, ge=0, le=1)
     FRAUD_RECURRING_MULTIPLIER: float = Field(default=0.90, ge=0, le=1)
@@ -88,12 +90,16 @@ class Settings(BaseSettings):
     FRAUD_BUDGET_INCREMENT: float = Field(default=0.10, ge=0, le=1)
     FRAUD_REVIEW_THRESHOLD: float = Field(default=0.85, ge=0, le=1)
     FRAUD_Z_THRESHOLD: float = Field(default=3.0, gt=0)
+    FRAUD_CATEGORY_INCREMENT: float = Field(default=0.10,ge=0,le=1)
+    FRAUD_TIME_INCREMENT: float = Field(default=0.10,ge=0,le=1)
+    FRAUD_CART_INCREMENT: float = Field(default=0.10,ge=0,le=1)
     JOB_INTERVAL_SECONDS: int = Field(default=3600, ge=10)
     ENABLE_BACKGROUND_JOBS: bool = True
     SUMMARY_RETENTION_DAYS: int = Field(default=0, ge=0, le=36500)
+    SOURCE_DATA_CURRENCY: str | None = Field(default="CAD",pattern=r'^[A-Z]{3}$')
 
     # Security & Compliance
-    CORS_ORIGINS: List[str] = Field(default=["http://localhost:3000", "http://localhost:8501"])
+    CORS_ORIGINS: list[str] = Field(default=["http://localhost:3000", "http://localhost:8501"])
     LOG_LEVEL: str = Field(default="INFO")
     LOG_FORMAT: str = Field(default="json")
 

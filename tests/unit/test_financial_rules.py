@@ -101,8 +101,8 @@ def test_pyramid_exact_targets():
     assert result['deformity_score']==0
     assert not result['inverted']
     result=pyramid([tx(-600),tx(-100,category='rent')],D(1000))
-    assert result['deformity_score']==110 and result['inverted']
-    assert pyramid([tx(-10)],D(0))['deformity_score'] is None
+    assert result['deformity_score']==D('65.71') and result['inverted']
+    assert pyramid([tx(-10)],D(0))['deformity_score']==D('80.00')
 
 
 @pytest.mark.parametrize("interval,cadence",[(28,'monthly'),(30,'monthly'),(31,'monthly'),(365,'annual'),(366,'annual'),(20,None),(60,None)])

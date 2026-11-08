@@ -4,10 +4,24 @@ Powered by structlog for production-grade observability
 """
 
 import logging
+import re
 import sys
+
 import structlog
-from typing import Any, Dict
+
 from app.core.config import settings
+
+
+class FinancialAccessFilter(logging.Filter):
+    """Redact source identifiers and query parameters from server access logs."""
+    def filter(self,record):
+        if isinstance(record.args,tuple):
+            record.args=tuple(re.sub(r'(/api/v1/(?:source-review|datasets/accounts)/)[^/? ]+',r'\1[redacted]',value).split('?')[0]
+                if isinstance(value,str) and '/api/v1/' in value else value for value in record.args)
+        return True
+
+
+logging.getLogger('uvicorn.access').addFilter(FinancialAccessFilter())
 
 def setup_logging():
     """

@@ -6,16 +6,16 @@ def test_historical_source_forecast_uses_month_end_and_reconciles_unknown_expens
     months = [{'month':f'2025-{m:02d}', 'money_in':1000, 'money_out':800,
                'month_end_balance':1200, 'household_bills':300, 'insurance':20,
                'loan_payments':80} for m in range(1,13)]
-    full = [{**months[-1], 'cash_withdrawals_genuine':'200.00', 'card_withdrawals':'50.00'}]
+    full = [{**row, 'cash_withdrawals_genuine':'200.00', 'card_withdrawals':'50.00'} for row in months]
     result = analyze_source_account({'account_id':1,'B':99999},months,full)
-    assert result['as_of']=='2025-12-31' and result['projection_reference']=='2026-01-01'
+    assert result['as_of']=='2025-12-31' and result['projection_reference']=='2025-12-31'
     assert result['forecast']['balance']==Decimal('1200.00')
     assert result['forecast']['history_months']==12
     assert result['forecast']['monthly_income']==Decimal('1000.00')
     assert result['forecast']['projections']['90']>Decimal('1700')
     assert result['pyramid']['totals']['base']==400
-    assert result['pyramid']['totals']['peak']==250
-    assert result['pyramid']['unclassified_total']==150
+    assert result['pyramid']['totals']['peak']==50
+    assert result['pyramid']['unclassified_total']==350
     assert result['pyramid']['deformity_score'] is None
     assert result['forecast']['recommendations']==[]
 

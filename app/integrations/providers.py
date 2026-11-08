@@ -6,6 +6,7 @@ from typing import Literal
 from decimal import Decimal
 from app.core.config import settings
 from app.core.exceptions import ExternalServiceError
+from app.engines.categorization import category_similarity
 
 
 async def request(method, url, *, timeout=None, retries=None, **kwargs):
@@ -66,7 +67,7 @@ async def browsing(user_id, category, at):
             viewed = datetime.fromisoformat(match["viewed_at"].replace("Z", "+00:00"))
             if viewed.tzinfo is None:
                 raise ValueError("Missing timezone")
-            if match["category"].casefold() == category.casefold() and at - timedelta(hours=72) <= viewed <= at:
+            if category_similarity(match["category"],category)>=0.90 and at - timedelta(hours=72) <= viewed <= at:
                 return True
         return False
     except (ValueError, KeyError, TypeError) as exc:

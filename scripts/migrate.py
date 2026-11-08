@@ -14,7 +14,7 @@ def main():
     if inspector.has_table("users", schema=schema) and not inspector.has_table("alembic_version"):
         # Refuse to stamp unknown or incomplete layouts. No financial records are modified.
         for table in Base.metadata.tables.values():
-            if table.schema not in ("core", "audit") or table.name.startswith("source_dataset_") or table.name in ("privacy_settings", "spending_budgets", "notifications"):
+            if table.schema not in ("core", "audit") or table.name.startswith("source_dataset_") or table.name in ("privacy_settings", "spending_budgets", "notifications", "plaid_connections"):
                 continue
             actual_schema = table.schema if schema else None
             if not inspector.has_table(table.name, schema=actual_schema):

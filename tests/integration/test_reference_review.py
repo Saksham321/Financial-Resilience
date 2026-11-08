@@ -28,9 +28,9 @@ async def seed_reference(db):
 
 
 @pytest.mark.asyncio
-async def test_reference_values_scenarios_and_read_only_state(client,test_db_session):
+async def test_reference_values_scenarios_and_read_only_state(client,test_db_session,admin_headers):
     await seed_reference(test_db_session)
-    response=await client.get('/api/v1/source-review/20160')
+    response=await client.get('/api/v1/source-review/20160',headers=admin_headers)
     assert response.status_code==200,response.text
     r=response.json();m=r['metrics']
     assert m['typical_income_I']==1000 and m['typical_spending_S']==900
@@ -38,32 +38,32 @@ async def test_reference_values_scenarios_and_read_only_state(client,test_db_ses
     assert m['baseline_runway_months']=='no shortfall (120+)'
     assert r['shock']['post_shock']['runway_months']==3.4
     assert r['profile']['home_district_name']=='Test district'
-    assert r['pyramid']['user_pyramid_amounts']=={'base_cad':250,'middle_cad':410,'peak_cad':240}
+    assert r['pyramid']['user_pyramid_amounts']=={'base_cad':250,'middle_cad':0,'peak_cad':240}
     assert len(r['predictive']['forecast']['projections_30_60_90'])==3
     assert r['inflation']['benchmark_cpi_period']=='2025-12'
-    assert {s['data_origin'] for s in r['subscriptions']['subscriptions']}=={'recorded_standing_order','illustrative_reference_example'}
-    assert len(r['subscriptions']['overlap_alerts'])==3
+    assert {s['data_origin'] for s in r['subscriptions']['subscriptions']}=={'recorded_standing_order'}
+    assert len(r['subscriptions']['overlap_alerts'])==0
     for scenario in ('FURNACE_REPAIR','LAID_OFF_AND_BILLS_UP','INFLATION_STAGNATION','CUSTOM'):
-        response=await client.post('/api/v1/source-review/20160/simulate',json={'scenario_id':scenario,'one_off_costs':200})
+        response=await client.post('/api/v1/source-review/20160/simulate',headers=admin_headers,json={'scenario_id':scenario,'one_off_costs':200})
         assert response.status_code==200,response.text
-    assert (await client.post('/api/v1/source-review/20160/simulate',json={'income_reduction_pct':2})).status_code==422
-    assert (await client.get('/api/v1/source-review/999')).status_code==404
+    assert (await client.post('/api/v1/source-review/20160/simulate',headers=admin_headers,json={'income_reduction_pct':2})).status_code==422
+    assert (await client.get('/api/v1/source-review/999',headers=admin_headers)).status_code==404
     assert await test_db_session.scalar(select(func.count()).select_from(Transaction))==0
 
 
 @pytest.mark.asyncio
-async def test_reference_fraud_manual_context_vacation_and_external_gates(client,test_db_session,monkeypatch):
+async def test_reference_fraud_manual_context_vacation_and_external_gates(client,test_db_session,monkeypatch,admin_headers):
     await seed_reference(test_db_session)
     body={'amount':5000,'merchant_name':'New merchant','is_new_store':True,'is_outside_normal_location':True,'chargebacks_count':0}
-    high=(await client.post('/api/v1/source-review/20160/fraud',json=body)).json()
+    high=(await client.post('/api/v1/source-review/20160/fraud',headers=admin_headers,json=body)).json()
     assert high['is_flagged'] is True
-    travel=(await client.post('/api/v1/source-review/20160/fraud',json={**body,'vacation_mode':True})).json()
+    travel=(await client.post('/api/v1/source-review/20160/fraud',headers=admin_headers,json={**body,'vacation_mode':True})).json()
     assert travel['anomaly_score']<high['anomaly_score']
     assert any(f['factor']=='CART_MAGNITUDE_Z_SCORE' for f in travel['scoring_breakdown'])
     ai=AsyncMock();voice=AsyncMock()
     monkeypatch.setattr(gemini_client,'generate_structured_response',ai)
     monkeypatch.setattr(providers,'speech',voice)
-    summary=await client.post('/api/v1/source-review/20160/briefing',json={})
-    assert summary.status_code==200 and summary.json()['source']=='DETERMINISTIC_REFERENCE_MODEL'
-    assert (await client.post('/api/v1/source-review/20160/audio',json={})).status_code==403
+    summary=await client.post('/api/v1/source-review/20160/briefing',headers=admin_headers,json={})
+    assert summary.status_code==200 and summary.json()['source']=='DETERMINISTIC_LOCAL_MODEL'
+    assert (await client.post('/api/v1/source-review/20160/audio',headers=admin_headers,json={})).status_code==403
     ai.assert_not_called();voice.assert_not_called()

@@ -13,3 +13,7 @@ __pycache__
 .ruff_cache
 *.egg-info
 tests
+backups
+.reference-review
+**/*.db
+**/*.sqlite3

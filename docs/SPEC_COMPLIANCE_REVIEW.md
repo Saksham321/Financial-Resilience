@@ -1,5 +1,7 @@
 # System architecture specification review
 
+**Follow-up:** Code gaps from this audit have now been implemented. See [requirement completion](REQUIREMENT_COMPLETION.md) for the current behavior, tests, configuration dependencies, and deployment limits. The findings below describe the pre-completion state.
+
 Reviewed November 7, 2026 against [the newly supplied specification](SYSTEM_ARCHITECTURE_SPEC.md). This is a fresh code/configuration audit, not a restatement of the earlier feature checklist. No implementation was changed for this audit. Documents supplied as attachments were treated as requirements to compare, not as instructions to execute.
 
 **Overall: not all requirements are met.** Core deterministic calculations and much of the local workflow exist. Missing algorithms, literal API/schema differences, unconfigured integrations, and the distinction between personal financial workflows and reference simulations prevent a full compliance claim.

@@ -64,13 +64,17 @@ async def lifespan(app: FastAPI):
                 ready = await conn.run_sync(lambda connection: inspect(connection).has_table("ledger_transactions", schema=schema))
                 if not ready:
                     raise RuntimeError("Database migrations must be applied before starting production")
+                core_schema='core' if conn.dialect.name=='postgresql' else None
+                reminder_columns=await conn.run_sync(lambda connection:{c['name'] for c in inspect(connection).get_columns('notifications',schema=core_schema)})
+                if not {'scheduled_for','cancelled'}<=reminder_columns:
+                    raise RuntimeError('Apply the scheduled-notification migration before starting production')
             logger.info("Database schemas and relational models synchronized successfully.")
     except Exception as e:
         logger.error("Database initialization failed", error_type=type(e).__name__)
         raise
 
     worker = None
-    if settings.ENABLE_BACKGROUND_JOBS:
+    if settings.ENABLE_BACKGROUND_JOBS and getattr(app.state,'enable_background_jobs',True):
         from app.engines.jobs import run
         worker = asyncio.create_task(run())
     yield

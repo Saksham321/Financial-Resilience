@@ -24,7 +24,7 @@ async def register(req: RegisterRequest, db: Annotated[AsyncSession, Depends(get
     Registers a new user account, creates default profile and preferences, and returns JWT.
     """
     if not settings.ENABLE_REGISTRATION:
-        raise AuthorizationError("Public sign-up is disabled. Search by source account ID or use the administrator login.")
+        raise AuthorizationError("Public sign-up is disabled. Search by customer account ID or use the administrator login.")
     # Check if user already exists
     existing_query = select(User).where(User.email == req.email)
     existing = (await db.execute(existing_query)).scalar_one_or_none()

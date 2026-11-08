@@ -3,12 +3,13 @@ Judge-Exact Financial Metrics & Runway Engine.
 Sheridan Datathon 2026 - Tangerine Track
 """
 
-from typing import Dict, Any, Union, Optional
-import numpy as np
-import pandas as pd
+from typing import Any
+
+from app.engines.calculations import D, money
 from app.reference_engines.data_loader import DataLoader
 
-def compute_judge_metrics(account_id: int, data_loader: Optional[DataLoader] = None) -> Dict[str, Any]:
+
+def compute_judge_metrics(account_id: int, data_loader: DataLoader | None = None) -> dict[str, Any]:
     """
     Computes baseline metrics following the exact judge rules from the Datathon README.
     
@@ -52,6 +53,8 @@ def compute_judge_metrics(account_id: int, data_loader: Optional[DataLoader] = N
     if loan and loan.get("is_active_end_2025", False):
         P = float(loan.get("monthly_payment", 0.0))
         
+    I,S,F,B,H,P=[float(money(v)) for v in (I,S,F,B,H,P)]
+
     # Additional helpful metrics
     discretionary = float((
         ms_sorted["card_withdrawals"] + 
@@ -67,7 +70,7 @@ def compute_judge_metrics(account_id: int, data_loader: Optional[DataLoader] = N
     baseline_runway, baseline_gap = calculate_runway(buffer=B, spending=S, income=I, one_off_costs=0.0)
     
     # Monthly net cash flow
-    net_monthly = I - S
+    net_monthly = float(money(D(str(I))-D(str(S))))
     savings_rate = (net_monthly / I) if I > 0 else 0.0
     
     return {
@@ -94,11 +97,11 @@ def calculate_runway(
     spending: float,
     income: float,
     one_off_costs: float = 0.0
-) -> (Union[float, str], float):
+) -> tuple[float | str, float]:
     """
     Runway calculation matching the exact Datathon specification:
     
-    buffer_left = B - one_off_costs
+    buffer_left = float(money(D(str(B))-D(str(one_off_costs))))
     gap         = spending_after_shock - income_after_shock
     if buffer_left <= 0:  runway = 0
     elif gap <= 0:        runway = "no shortfall (120+)"
@@ -106,8 +109,8 @@ def calculate_runway(
     
     Runway is rounded to 1 decimal.
     """
-    buffer_left = buffer - one_off_costs
-    gap = spending - income
+    buffer_left = float(money(D(str(buffer))-D(str(one_off_costs))))
+    gap = float(money(D(str(spending))-D(str(income))))
     
     if buffer_left <= 0:
         return 0.0, gap
@@ -125,9 +128,9 @@ def evaluate_shock_scenario(
     bills_increase_pct: float = 0.0,
     one_off_costs: float = 0.0,
     shock_duration_months: int = 6,
-    custom_label: Optional[str] = None,
-    data_loader: Optional[DataLoader] = None
-) -> Dict[str, Any]:
+    custom_label: str | None = None,
+    data_loader: DataLoader | None = None
+) -> dict[str, Any]:
     """
     Applies preset or custom shock twists and recalculates runway and impact.
     
@@ -151,7 +154,7 @@ def evaluate_shock_scenario(
     
     if scenario == "LAID_OFF_EI":
         title = "Job Loss with EI (55%)"
-        description = "Customer laid off. Employment Insurance pays 55% of regular income for 6 months."
+        description = "Hypothetical assumption: income falls to 55% for six months. This is not an EI eligibility or benefit determination."
         income_reduction_pct = 0.45  # Remaining 55%
         bills_increase_pct = 0.0
         one_off_costs = 0.0
@@ -165,7 +168,7 @@ def evaluate_shock_scenario(
         shock_duration_months = 1
     elif scenario == "LAID_OFF_AND_BILLS_UP":
         title = "Job Loss (EI 55%) + Bills Up 15%"
-        description = "Laid off with EI at 55% while household bills/rent jump 15% in the same month."
+        description = "Hypothetical assumption: income falls to 55% and household bills increase 15%; no benefit eligibility is implied."
         income_reduction_pct = 0.45
         bills_increase_pct = 0.15
         one_off_costs = 0.0
@@ -179,9 +182,9 @@ def evaluate_shock_scenario(
         shock_duration_months = 12
 
     # Calculate post-shock income & spending
-    income_shock = max(0.0, I * (1.0 - income_reduction_pct))
-    spending_shock = max(0.0, S + (bills_increase_pct * H))
-    buffer_left = B - one_off_costs
+    income_shock = float(money(max(D(0),D(str(I))*(D(1)-D(str(income_reduction_pct))))))
+    spending_shock = float(money(max(D(0),D(str(S))+D(str(bills_increase_pct))*D(str(H)))))
+    buffer_left = float(money(D(str(B))-D(str(one_off_costs))))
     
     runway_shock, gap_shock = calculate_runway(
         buffer=B,
@@ -194,16 +197,16 @@ def evaluate_shock_scenario(
     runway_numeric = runway_shock if isinstance(runway_shock, (int, float)) else 120.0
     if runway_numeric < 2.0:
         resilience_tier = "CRITICAL_RISK"
-        tier_description = "Under 2 months runway! High risk of immediate overdraft and default."
+        tier_description = "The benchmark buffer is exhausted or covers fewer than two months of modeled shortfall. Review essential commitments and near-term cash needs."
     elif runway_numeric < 6.0:
         resilience_tier = "HIGH_VULNERABILITY"
-        tier_description = "Under 6 months runway. Urgent cash flow restructuring required."
+        tier_description = ""
     elif runway_numeric < 12.0:
         resilience_tier = "MODERATE_RESILIENCE"
-        tier_description = "6 to 12 months runway. Buffer allows controlled recovery."
+        tier_description = "The benchmark buffer covers six to twelve months of the modeled shortfall, subject to the stated assumptions."
     else:
         resilience_tier = "STRONG_RESILIENCE"
-        tier_description = "Over 12 months runway. Customer comfortably absorbs the shock."
+        tier_description = "The benchmark covers at least twelve months or has no ongoing shortfall. This estimate does not guarantee future resilience."
         
     return {
         "account_id": account_id,

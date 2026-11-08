@@ -5,9 +5,9 @@ from test_financial_api import register
 
 
 @pytest.mark.asyncio
-async def test_dataset_auth_empty_state_and_read_only_browsing(client, test_db_session):
+async def test_dataset_auth_empty_state_and_read_only_browsing(client, test_db_session, admin_headers):
     assert (await client.get('/api/v1/datasets/overview')).status_code == 200
-    h = await register(client)
+    h = admin_headers
     assert (await client.get('/api/v1/datasets/overview', headers=h)).json()['available'] is False
     for identifier in (1, 2):
         test_db_session.add(DatasetAccount(dataset_id=DATASET_ID, account_id=identifier,
@@ -34,7 +34,7 @@ async def test_dataset_auth_empty_state_and_read_only_browsing(client, test_db_s
     assert page['total'] == 1 and page['items'][0]['account_id'] == 1
     detail = (await client.get('/api/v1/datasets/accounts/1', headers=h)).json()
     assert detail['account']['B'] == 150.25 and detail['months'][0]['month'] == '2025-12'
-    assert detail['analysis']['forecast']['balance'] == '150.25'
+    assert detail['analysis']['forecast'] is None
     assert detail['analysis']['as_of'] == '2025-12-31'
     assert detail['analysis']['pyramid']['unclassified_total'] == '50.25'
     assert (await client.get('/api/v1/datasets/accounts/3', headers=h)).status_code == 404

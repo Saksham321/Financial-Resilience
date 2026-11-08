@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import Annotated, Literal
 from uuid import UUID
 from pydantic import BaseModel, Field, ConfigDict, model_validator, field_validator
+from app.engines.categorization import canonical_category
 
 Money = Annotated[Decimal, Field(max_digits=18, decimal_places=2, allow_inf_nan=False)]
 PositiveMoney = Annotated[Decimal, Field(gt=0, max_digits=18, decimal_places=2, allow_inf_nan=False)]
@@ -16,7 +17,7 @@ class Input(BaseModel):
 
 class AccountInput(Input):
     institution_name: str = Field(min_length=1, max_length=100)
-    account_type: Literal["CHECKING", "SAVINGS", "CREDIT", "LOAN"]
+    account_type: Literal["CHECKING", "SAVINGS", "CASH", "CREDIT", "LOAN"]
     masked_account_number: str = Field(pattern=r"^[*xX\d -]{1,20}$")
     current_balance: Money
     available_balance: Money
@@ -61,8 +62,8 @@ class TransactionInput(Coordinates):
 
     @field_validator("category", "merchant")
     @classmethod
-    def normalized(cls, value):
-        return value.casefold()
+    def normalized(cls, value, info):
+        return value.casefold() if info.field_name=='merchant' else canonical_category(value)
 
 
 class PrivacyInput(Coordinates):
@@ -85,7 +86,7 @@ class BudgetInput(Input):
     @field_validator("category")
     @classmethod
     def normalized(cls, value):
-        return value.casefold()
+        return canonical_category(value)
 
 
 class FlowInput(Input):
@@ -102,7 +103,7 @@ class FlowInput(Input):
     def valid(self):
         if not self.amount or self.end_date and self.end_date < self.due_date:
             raise ValueError("Invalid flow amount or date range")
-        self.category = self.category.casefold()
+        self.category = canonical_category(self.category)
         return self
 
 
@@ -168,6 +169,8 @@ class SubscriptionInput(Input):
 class SummaryInput(Input):
     question: str = Field(default="Explain my financial health, spending habits, runway, shock scenarios, recommendations and contingency plan.", max_length=2000)
     scenario: ScenarioInput | None = None
+    generate_audio: bool = True
+    voice_profile: Literal['professional','empathetic'] = 'professional'
 
 
 class Narrative(Input):
@@ -175,6 +178,8 @@ class Narrative(Input):
     metric_keys: list[str] = Field(max_length=12)
     recommendation_ids: list[int] = Field(max_length=8)
     closing: Literal["Review the assumptions and upcoming commitments before making changes.", "You can update your accounts and schedules to keep this plan current."]
+    generated_summary: str | None = Field(default=None,max_length=3000)
+    generated_actions: list[str] = Field(default_factory=list,max_length=8)
 
 
 class AudioInput(Input):

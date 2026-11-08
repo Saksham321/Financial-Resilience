@@ -3,17 +3,18 @@ Inflation Tracking & Real Wage Analysis Engine (engine-inflation-tracker).
 Sheridan Datathon 2026 - Tangerine Track
 """
 
-from typing import Dict, Any, List, Optional
-import pandas as pd
+from typing import Any
+
 from app.reference_engines.config import CANADIAN_CPI_INDEX
 from app.reference_engines.data_loader import DataLoader
 
+
 class InflationTrackerEngine:
-    def __init__(self, data_loader: Optional[DataLoader] = None):
+    def __init__(self, data_loader: DataLoader | None = None):
         self.dl = data_loader or DataLoader.get_instance()
         self.cpi = CANADIAN_CPI_INDEX
 
-    def analyze_inflation_impact(self, account_id: int) -> Dict[str, Any]:
+    def analyze_inflation_impact(self, account_id: int) -> dict[str, Any]:
         """
         Calculates trailing quarterly nominal vs real income and expenses,
         evaluates QoQ growth rates, and triggers overspending or stagnation alerts.
@@ -34,7 +35,13 @@ class InflationTrackerEngine:
         )
         
         # Attach monthly CPI
-        ms_sorted["cpi"] = ms_sorted["month"].apply(lambda m: self.cpi.get(m, base_cpi))
+        missing=[m for m in ms_sorted['month'] if m not in self.cpi]
+        if missing:
+            return {'account_id':account_id,'benchmark_cpi_period':base_cpi_key,'period_cpi_increase_pct':None,
+                'trailing_quarters':[],'active_alerts':[],
+                'summary':{'latest_quarter':None,'latest_real_net_flow':None,'purchasing_power_trend':'UNAVAILABLE'},
+                'missing_cpi_months':missing}
+        ms_sorted["cpi"] = ms_sorted["month"].apply(lambda m: self.cpi[m])
         
         # Calculate monthly real values adjusted to end-of-2025 purchasing power
         ms_sorted["real_money_in"] = ms_sorted["money_in"] * (base_cpi / ms_sorted["cpi"])

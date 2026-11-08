@@ -2,13 +2,16 @@
 Global Exception Handler Middleware & Registrars
 """
 
+from datetime import UTC, datetime
+
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-from fastapi.exceptions import RequestValidationError
 from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
 from app.core.exceptions import AppException
 from app.core.logging import logger
-from datetime import datetime, timezone
+
 
 def register_exception_handlers(app: FastAPI):
     """Registers standard exception handlers on the FastAPI application."""
@@ -19,10 +22,8 @@ def register_exception_handlers(app: FastAPI):
         logger.warning(
             "Application exception intercepted",
             error_code=exc.error_code,
-            message=exc.message,
             status_code=exc.status_code,
-            details=exc.details,
-            path=request.url.path
+            path=getattr(request.scope.get('route'),'path','unmatched')
         )
         return JSONResponse(
             status_code=exc.status_code,
@@ -31,7 +32,7 @@ def register_exception_handlers(app: FastAPI):
                     "code": exc.error_code,
                     "message": exc.message,
                     "details": exc.details,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "correlation_id": correlation_id
                 }
             }
@@ -44,7 +45,7 @@ def register_exception_handlers(app: FastAPI):
         logger.warning(
             "Validation exception intercepted",
             errors=errors,
-            path=request.url.path
+            path=getattr(request.scope.get('route'),'path','unmatched')
         )
         return JSONResponse(
             status_code=422,
@@ -53,7 +54,7 @@ def register_exception_handlers(app: FastAPI):
                     "code": "VALIDATION_ERROR",
                     "message": "Input validation failed",
                     "details": {"validation_errors": jsonable_encoder(errors)},
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "correlation_id": correlation_id
                 }
             }
@@ -64,8 +65,8 @@ def register_exception_handlers(app: FastAPI):
         correlation_id = getattr(request.state, "correlation_id", None)
         logger.error(
             "Unhandled server exception",
-            exc_info=exc,
-            path=request.url.path
+            error_type=type(exc).__name__,
+            path=getattr(request.scope.get('route'),'path','unmatched')
         )
         return JSONResponse(
             status_code=500,
@@ -74,7 +75,7 @@ def register_exception_handlers(app: FastAPI):
                     "code": "INTERNAL_SERVER_ERROR",
                     "message": "An unexpected error occurred. Please contact support with correlation ID.",
                     "details": {},
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "correlation_id": correlation_id
                 }
             }

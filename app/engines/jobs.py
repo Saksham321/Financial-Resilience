@@ -1,6 +1,7 @@
 """Periodic durable work. Run one worker; delivery keys permit provider deduplication."""
 import asyncio
-from sqlalchemy import select
+from sqlalchemy import select,or_
+from datetime import datetime,timezone
 from app.core.config import settings
 from app.core.logging import logger
 from app.core.exceptions import ExternalServiceError
@@ -24,7 +25,9 @@ async def tick():
                 await manage_data_retention(db, uid)
                 await db.commit()
                 if settings.NOTIFICATION_API_URL and settings.NOTIFICATION_API_KEY:
-                    pending = list((await db.scalars(select(Notification).where(Notification.user_id == uid, Notification.delivery_status != "delivered"))).all())
+                    pending = list((await db.scalars(select(Notification).where(Notification.user_id == uid,
+                        Notification.delivery_status != "delivered",Notification.cancelled.is_(False),
+                        or_(Notification.scheduled_for.is_(None),Notification.scheduled_for<=datetime.now(timezone.utc))))).all())
                     for row in pending:
                         try:
                             response = await adapter("NOTIFICATION", "/deliver", {"user_id": str(uid), "title": row.title, "message": row.message}, row.dedupe_key)

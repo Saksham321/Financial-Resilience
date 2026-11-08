@@ -5,9 +5,12 @@ singleton, raw file paths, network clients, and startup behavior are not used.
 """
 import pandas as pd
 from sqlalchemy import select
-from app.shared.database.datasets import DatasetSourceRecord as Record
+
 from app.api.endpoints.datasets import DATASET_ID
-from app.core.exceptions import EntityNotFoundError, ValidationException
+from app.core.config import settings
+from app.core.exceptions import EntityNotFoundError
+from app.shared.database.datasets import DatasetAccount
+from app.shared.database.datasets import DatasetSourceRecord as Record
 
 
 class DataLoader:
@@ -25,13 +28,15 @@ class DataLoader:
         for row in rows:
             self.sources.setdefault(row.source, []).append(row.payload)
         if not self.sources.get('accounts'):
-            raise EntityNotFoundError('Source account not found in imported CSV records')
-        if not self.sources.get('monthly_summary'):
-            raise ValidationException('Source account has no monthly history')
-        self.monthly = pd.DataFrame(self.sources['monthly_summary']).sort_values('month')
+            raise EntityNotFoundError('Customer account not found in imported CSV records')
+        self.monthly = pd.DataFrame(self.sources.get('monthly_summary',[]))
+        if not self.monthly.empty:self.monthly=self.monthly.sort_values('month')
         for column in self.monthly.columns:
             if column != 'month':
-                self.monthly[column] = pd.to_numeric(self.monthly[column], errors='raise')
+                self.monthly[column] = pd.to_numeric(self.monthly[column], errors='coerce')
+        required={'money_in','money_out','month_end_balance','avg_daily_balance','household_bills','insurance','loan_payments',
+                  'card_withdrawals','cash_withdrawals_genuine','transfers_out_other','days_below_zero','bank_fees'}
+        self.financial_history_available=not self.monthly.empty and required.issubset(self.monthly.columns) and not self.monthly[list(required)].isna().any().any()
         self.transactions = pd.DataFrame(self.sources.get('transactions', []))
         if not self.transactions.empty:
             self.transactions = self.transactions.sort_values(['date','transaction_id'])
@@ -72,6 +77,9 @@ class DataLoader:
             'average_salary':float(home.get('average_salary',0)),
             'unemployment_rate_2023':float(home.get('unemployment_rate_2023',0)),
             'cards':cards,'has_loan':self.loan is not None,'loan':self.loan}
+        master=await db.get(DatasetAccount,(DATASET_ID,account_id))
+        self.profile['archetype']=master.payload.get('archetype','Unassigned profile') if master else 'Unassigned profile'
+        self.profile['currency_code']=settings.SOURCE_DATA_CURRENCY
         return self
 
     def get_account_profile(self, account_id):

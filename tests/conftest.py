@@ -73,3 +73,12 @@ async def client(test_db_session: AsyncSession) -> AsyncGenerator[AsyncClient, N
         yield ac
 
     fastapi_app.dependency_overrides.clear()
+
+@pytest_asyncio.fixture
+async def admin_headers(test_db_session):
+    from app.shared.database.models import User
+    from app.core.security import create_access_token
+    user=User(email='fixture-admin@example.com',hashed_password='unused-in-token-fixture',role='admin',is_active=True)
+    test_db_session.add(user)
+    await test_db_session.commit()
+    return {'Authorization':'Bearer '+create_access_token(user.id,roles=['admin'])}

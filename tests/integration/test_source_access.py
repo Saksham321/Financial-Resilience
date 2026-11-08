@@ -8,7 +8,7 @@ from scripts.create_admin import provision_admin
 
 
 @pytest.mark.asyncio
-async def test_public_source_lookup_but_no_signup_or_personal_access(client, monkeypatch):
+async def test_historical_lookup_is_public_and_personal_tools_stay_private(client, monkeypatch):
     monkeypatch.setattr(settings,'ENABLE_REGISTRATION',False)
     assert (await client.get('/api/v1/datasets/overview')).status_code == 200
     assert (await client.get('/api/v1/datasets/accounts')).status_code == 200

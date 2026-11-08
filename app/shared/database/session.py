@@ -4,13 +4,17 @@ Supports TigerData (PostgreSQL/TimescaleDB) with graceful local fallback
 """
 
 import os
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
+from pathlib import Path
+
 from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from sqlalchemy.orm import sessionmaker, Session
-from app.core.config import settings
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import Session, sessionmaker
+
+from app.core.config import PROJECT_ROOT, settings
 from app.core.logging import logger
+
 
 def _resolve_database_urls():
     """Normalize PostgreSQL connection URLs for app and migration engines.
@@ -25,6 +29,10 @@ def _resolve_database_urls():
         raw_url = "postgresql://" + raw_url[len("postgres://"):]
 
     parsed_url = make_url(raw_url)
+    if parsed_url.drivername.startswith('sqlite') and parsed_url.database and parsed_url.database!=':memory:' and not parsed_url.database.startswith('file:'):
+        database_path=Path(parsed_url.database)
+        if not database_path.is_absolute():
+            parsed_url=parsed_url.set(database=str((PROJECT_ROOT/database_path).resolve()))
     if parsed_url.drivername.startswith("postgresql"):
         if parsed_url.drivername == "postgresql+asyncpg":
             async_url = parsed_url

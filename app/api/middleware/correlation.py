@@ -5,11 +5,14 @@ Ensures every request has a traceable correlation ID for distributed logs
 
 import uuid
 from time import perf_counter
-from app.core.metrics import system_metrics
+
+import structlog
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
-import structlog
+
+from app.core.metrics import system_metrics
+
 
 class CorrelationIdMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
@@ -24,6 +27,8 @@ class CorrelationIdMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
             status_code = response.status_code
             response.headers["X-Correlation-ID"] = correlation_id
+            if request.url.path.startswith(('/api/v1/datasets','/api/v1/source-review','/api/v1/finance')):
+                response.headers['Cache-Control']='no-store'
             return response
         finally:
             route = request.scope.get("route")

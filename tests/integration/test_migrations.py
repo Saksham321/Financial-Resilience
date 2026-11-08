@@ -36,4 +36,4 @@ def test_adopt_legacy_metadata_database_without_losing_records(tmp_path):
     assert result.returncode==0,result.stdout+result.stderr
     with sqlite3.connect(path) as db:
         assert db.execute('SELECT COUNT(*) FROM users').fetchone()[0]==1
-        assert db.execute('SELECT version_num FROM alembic_version').fetchone()[0]=='raw_datasets_v1'
+        assert db.execute('SELECT version_num FROM alembic_version').fetchone()[0]=='plaid_connections_v1'
