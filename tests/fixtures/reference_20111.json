@@ -1,0 +1,419 @@
+{
+  "account_id": 20111,
+  "as_of": "2025-12",
+  "currency": "Source units; reference model originally labels these CAD without conversion",
+  "profile": {
+    "account_id": 20111,
+    "client_id": "8035546",
+    "account_opened": "2022-11-29",
+    "statement_frequency": "monthly statement",
+    "gender": "M",
+    "birth_date": "1966-03-20",
+    "branch_district_name": "Rokycany",
+    "home_district_name": "Rokycany",
+    "region": "west Bohemia",
+    "average_salary": 5564.63,
+    "unemployment_rate_2023": 3.6,
+    "cards": [],
+    "has_loan": true,
+    "loan": {
+      "loan_id": "906277",
+      "account_id": "20111",
+      "loan_start": "2023-12-15",
+      "amount": 139811.4,
+      "duration_months": 60.0,
+      "monthly_payment": 2330.19,
+      "status": "D",
+      "status_meaning": "running, client in debt",
+      "defaulted": 1.0,
+      "is_active_end_2025": true
+    }
+  },
+  "metrics": {
+    "account_id": 20111,
+    "latest_month": "2025-12",
+    "latest_balance": 10862.65,
+    "typical_income_I": 6339.39,
+    "typical_spending_S": 8599.6,
+    "typical_fixed_costs_F": 2330.06,
+    "savings_buffer_B": 17611.86,
+    "household_bills_H": 0.0,
+    "loan_payment_P": 2330.19,
+    "discretionary_spending": 7425.39,
+    "net_monthly_cashflow": -2260.22,
+    "savings_rate_pct": -35.7,
+    "recent_days_below_zero": 0,
+    "baseline_gap": 2260.22,
+    "baseline_runway_months": 7.8
+  },
+  "shock": {
+    "account_id": 20111,
+    "scenario_id": "LAID_OFF_EI",
+    "scenario_title": "Job Loss with EI (55%)",
+    "scenario_description": "Customer laid off. Employment Insurance pays 55% of regular income for 6 months.",
+    "shock_parameters": {
+      "income_reduction_pct": 45.0,
+      "bills_increase_pct": 0.0,
+      "one_off_costs": 0.0,
+      "shock_duration_months": 6
+    },
+    "baseline": {
+      "income": 6339.39,
+      "spending": 8599.6,
+      "buffer": 17611.86,
+      "runway": 7.8,
+      "net_monthly": -2260.22
+    },
+    "post_shock": {
+      "income": 3486.66,
+      "spending": 8599.6,
+      "one_off_deducted": 0.0,
+      "buffer_left": 17611.86,
+      "monthly_gap": 5112.94,
+      "runway_months": 3.4,
+      "resilience_tier": "HIGH_VULNERABILITY",
+      "tier_description": "Under 6 months runway. Urgent cash flow restructuring required."
+    }
+  },
+  "pyramid": {
+    "account_id": 20111,
+    "visual_status": "Highly Deformed (Top-Heavy)",
+    "status_color": "#ea580c",
+    "deformity_score": 55.1,
+    "is_inverted": false,
+    "total_monthly_spending": 13004.74,
+    "typical_monthly_income": 6339.39,
+    "user_pyramid_ratios": {
+      "base_pct": 14.9,
+      "middle_pct": 85.1,
+      "peak_pct": 0.0
+    },
+    "user_pyramid_amounts": {
+      "base_cad": 1941.72,
+      "middle_cad": 11063.02,
+      "peak_cad": 0.0
+    },
+    "ideal_pyramid_ratios": {
+      "base_pct": 50.0,
+      "middle_pct": 30.0,
+      "peak_pct": 20.0
+    },
+    "proposed_rearrangement": "Spending structure is well aligned with Tangerine resilience targets. Maintain emergency buffer growth.",
+    "rearrangement_amount_cad": 0.0
+  },
+  "predictive": {
+    "user_id": "acc_20111",
+    "account_id": 20111,
+    "forecast": {
+      "projected_zero_date": "No zero date (buffer positive)",
+      "current_runway_days": 237,
+      "trend_slope": -1564.37,
+      "trend_direction": "DECREASING_SPEND",
+      "linear_equation": "y = -1564.37x + 21608.8",
+      "projections_30_60_90": [
+        {
+          "horizon_days": 30,
+          "target_date": "2026-01-27",
+          "projected_monthly_outflow": 2836.3,
+          "projected_balance": 14365.74
+        },
+        {
+          "horizon_days": 60,
+          "target_date": "2026-02-26",
+          "projected_monthly_outflow": 1271.93,
+          "projected_balance": 19433.2
+        },
+        {
+          "horizon_days": 90,
+          "target_date": "2026-03-29",
+          "projected_monthly_outflow": 0.0,
+          "projected_balance": 25772.59
+        }
+      ]
+    },
+    "spending_breakdown": {
+      "essential_monthly": 1174.21,
+      "discretionary_monthly": 7425.39,
+      "discretionary_ratio_pct": 86.3
+    },
+    "action_plan": [
+      {
+        "action_id": "act_rec_001",
+        "category": "DISCRETIONARY_SPENDING",
+        "target_reduction_pct": 0.1,
+        "monthly_savings_cad": 742.54,
+        "projected_runway_extension_days": 116,
+        "message": "Reduce discretionary spending by 10% ($742.54/mo) to extends runway by ~3.8 months (116 days)."
+      },
+      {
+        "action_id": "act_rec_002",
+        "category": "DISCRETIONARY_SPENDING",
+        "target_reduction_pct": 0.2,
+        "monthly_savings_cad": 1485.08,
+        "projected_runway_extension_days": 454,
+        "message": "Reduce discretionary spending by 20% ($1485.08/mo) to extends runway by ~14.9 months (454 days)."
+      }
+    ]
+  },
+  "mediation": {
+    "account_id": 20111,
+    "status": "SHORTFALL_DETECTED",
+    "message": "Shortfall detected. Standard credit restricted; activating Lifeline Installment Protection.",
+    "shock_amount": 30677.64,
+    "shock_type": "EMERGENCY_EXPENSE",
+    "liquid_buffer": 17611.86,
+    "shortfall_amount": 13065.78,
+    "credit_evaluation": {
+      "credit_eligible": false,
+      "risk_tier": "HIGH",
+      "disqualification_reasons": [
+        "Active loan currently in distress/debt (Status D)."
+      ],
+      "recent_days_below_zero": 0,
+      "has_active_debt": true,
+      "has_default_history": false,
+      "current_liquid_buffer": 17611.86
+    },
+    "installment_proposal": {
+      "eligible": true,
+      "action_required": "SELECT_LIFELINE_PLAN",
+      "rationale": "Prevents catastrophic default and overdraft penalties via structured payments.",
+      "plans": [
+        {
+          "term_months": 3,
+          "monthly_installment": 4365.26,
+          "total_repayable": 13095.779999999999,
+          "projected_bank_revenue": 30.0,
+          "fee_structure": {
+            "type": "FLAT_FEE",
+            "amount": 30.0
+          },
+          "apr": 0.0,
+          "description": "3-Month Relief: $30 flat fee, 0% APR"
+        },
+        {
+          "term_months": 6,
+          "monthly_installment": 2231.93,
+          "total_repayable": 13391.58,
+          "projected_bank_revenue": 325.8,
+          "fee_structure": {
+            "type": "INTEREST",
+            "rate": 0.085
+          },
+          "apr": 8.5,
+          "description": "6-Month Stabilizer: 8.50% APR structured installment"
+        },
+        {
+          "term_months": 12,
+          "monthly_installment": 1148.08,
+          "total_repayable": 13776.96,
+          "projected_bank_revenue": 711.18,
+          "fee_structure": {
+            "type": "INTEREST",
+            "rate": 0.099
+          },
+          "apr": 9.9,
+          "description": "12-Month Extended: 9.90% APR budget protection plan"
+        }
+      ]
+    }
+  },
+  "subscriptions": {
+    "account_id": 20111,
+    "total_active_subscriptions": 3,
+    "total_monthly_recurring_spend": 2370.04,
+    "total_potential_annual_savings": 275.88,
+    "subscriptions": [
+      {
+        "subscription_id": "sub_20111_100",
+        "user_id": "usr_20111",
+        "merchant_name": "Financing Loan (WX)",
+        "category": "LOAN_SERVICING",
+        "amount": 2330.06,
+        "cadence": "MONTHLY",
+        "next_billing_date": "2026-01-19",
+        "notification_scheduled_for": "2026-01-16",
+        "overlap_detected": false,
+        "overlapping_subscription_ids": [],
+        "data_origin": "recorded_standing_order"
+      },
+      {
+        "subscription_id": "sub_20111_s1",
+        "user_id": "usr_20111",
+        "merchant_name": "StreamCo Premium 4K",
+        "category": "STREAMING_VIDEO",
+        "amount": 22.99,
+        "cadence": "MONTHLY",
+        "next_billing_date": "2026-01-12",
+        "notification_scheduled_for": "2026-01-09",
+        "overlap_detected": true,
+        "overlapping_subscription_ids": [
+          "sub_20111_s2"
+        ],
+        "data_origin": "illustrative_reference_example"
+      },
+      {
+        "subscription_id": "sub_20111_s2",
+        "user_id": "usr_20111",
+        "merchant_name": "CineMax Digital Plus",
+        "category": "STREAMING_VIDEO",
+        "amount": 16.99,
+        "cadence": "MONTHLY",
+        "next_billing_date": "2026-01-18",
+        "notification_scheduled_for": "2026-01-15",
+        "overlap_detected": true,
+        "overlapping_subscription_ids": [
+          "sub_20111_s1"
+        ],
+        "data_origin": "illustrative_reference_example"
+      }
+    ],
+    "overlap_alerts": [
+      {
+        "category": "STREAMING_VIDEO",
+        "severity": "MEDIUM",
+        "active_subscriptions": 2,
+        "total_monthly_spend": 39.98,
+        "potential_monthly_savings": 22.99,
+        "potential_annual_savings": 275.88,
+        "action_trigger": "Active subscriptions >= 2 in same category",
+        "message": "Consolidation Alert: You have 2 active streaming services ($39.98/mo). Consolidating could save $275.88/year.",
+        "services": [
+          "StreamCo Premium 4K",
+          "CineMax Digital Plus"
+        ]
+      }
+    ]
+  },
+  "inflation": {
+    "account_id": 20111,
+    "benchmark_cpi_period": "2025-12",
+    "period_cpi_increase_pct": 3.89,
+    "trailing_quarters": [
+      {
+        "quarter": "2024-Q3",
+        "nominal_money_in": 13302.71,
+        "nominal_money_out": 21497.76,
+        "real_money_in": 13884.84,
+        "real_money_out": 22434.17,
+        "cpi_index": 161.9,
+        "real_income_qoq_pct": null,
+        "real_expenses_qoq_pct": null
+      },
+      {
+        "quarter": "2024-Q4",
+        "nominal_money_in": 35256.23,
+        "nominal_money_out": 22873.59,
+        "real_money_in": 36692.04,
+        "real_money_out": 23771.31,
+        "cpi_index": 162.3,
+        "real_income_qoq_pct": 164.26,
+        "real_expenses_qoq_pct": 5.96
+      },
+      {
+        "quarter": "2025-Q1",
+        "nominal_money_in": 60695.41,
+        "nominal_money_out": 71484.2,
+        "real_money_in": 62345.52,
+        "real_money_out": 73453.98,
+        "cpi_index": 164.1,
+        "real_income_qoq_pct": 69.92,
+        "real_expenses_qoq_pct": 209.0
+      },
+      {
+        "quarter": "2025-Q2",
+        "nominal_money_in": 37009.13,
+        "nominal_money_out": 28601.7,
+        "real_money_in": 37689.38,
+        "real_money_out": 29067.81,
+        "cpi_index": 166.0,
+        "real_income_qoq_pct": -39.55,
+        "real_expenses_qoq_pct": -60.43
+      },
+      {
+        "quarter": "2025-Q3",
+        "nominal_money_in": 36142.51,
+        "nominal_money_out": 32700.15,
+        "real_money_in": 36430.98,
+        "real_money_out": 32966.78,
+        "cpi_index": 167.3,
+        "real_income_qoq_pct": -3.34,
+        "real_expenses_qoq_pct": 13.41
+      },
+      {
+        "quarter": "2025-Q4",
+        "nominal_money_in": 13235.11,
+        "nominal_money_out": 23270.78,
+        "real_money_in": 13252.79,
+        "real_money_out": 23306.56,
+        "cpi_index": 168.2,
+        "real_income_qoq_pct": -63.62,
+        "real_expenses_qoq_pct": -29.3
+      }
+    ],
+    "active_alerts": [
+      {
+        "alert_type": "OVERSPENDING_ALERT",
+        "severity": "HIGH",
+        "title": "Inflation Outpacing Earnings (Overspending Risk)",
+        "message": "Real expenses grew -29.3% QoQ while real income grew only -63.62%. Outflow exceeds inflow."
+      },
+      {
+        "alert_type": "WAGE_STAGNATION_ALERT",
+        "severity": "MEDIUM",
+        "title": "Purchasing Power Erosion (Wage Stagnation)",
+        "message": "Real income dropped 63.62% after adjusting for CPI inflation. Effective purchasing power is decreasing."
+      }
+    ],
+    "summary": {
+      "latest_quarter": "2025-Q4",
+      "latest_real_net_flow": -10053.77,
+      "purchasing_power_trend": "EROSION"
+    }
+  },
+  "standing_orders": [
+    {
+      "order_id": 842974,
+      "account_id": "20111",
+      "to_bank": "WX",
+      "to_account": "75490885",
+      "amount": 2330.06,
+      "purpose": "loan payment"
+    }
+  ],
+  "briefing": {
+    "source": "DETERMINISTIC_REFERENCE_MODEL",
+    "summary_text": "Source account 20111: typical monthly income 6,339.39, spending 8,599.60, and six-month average buffer 17,611.86 source units. Under Job Loss with EI (55%), modeled runway is 3.4 months (HIGH_VULNERABILITY).",
+    "goal_plan": {
+      "headline": "Four-month resilience reserve",
+      "target_emergency_fund": 34398.4,
+      "current_buffer": 17611.86,
+      "monthly_savings": 760.73,
+      "biweekly_savings": 380.37,
+      "target_months_to_complete": 22,
+      "action_steps": [
+        "Illustrative savings target: 760.73 per month; assess actual affordability first.",
+        "Target reserve: 34398.4 source units (four months of typical spending).",
+        "Spending structure is well aligned with reference resilience targets. Maintain emergency buffer growth."
+      ]
+    },
+    "backup_plan": {
+      "headline": "Shock contingency plan",
+      "immediate_actions": [
+        "Model a 30% discretionary reduction to 5197.77 per month.",
+        "Review recurring commitments and distinguish recorded orders from illustrative subscription examples.",
+        "Request real underwriting and an affordability assessment before accepting credit."
+      ],
+      "estimated_monthly_cashflow_improvement": 2250.61,
+      "projected_runway_gain_months": 1.5,
+      "lifeline_recommendation": "Review modeled six-month installment terms if liquidity is depleted; these are not lender offers."
+    }
+  },
+  "assumptions": [
+    "Historical reference calculations from the supplied ZIP; not live balances or underwriting.",
+    "Subscription examples and January 2026 billing dates are illustrative and do not establish actual subscriptions.",
+    "CPI uses the ZIP-provided 2020\u20132025 snapshot, not the live CPI feed.",
+    "Reference pyramid uses 12-month average shares of spending; the original overview uses last-month shares of income.",
+    "Modeled shock duration is reported; the reference runway formula does not model income recovery after that duration."
+  ]
+}

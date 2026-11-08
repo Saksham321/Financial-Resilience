@@ -89,7 +89,7 @@ async function load() {
 }
 function signout(){isAdmin=false;updateDatasetAdminView();resetDataset();token='';email='';data=null;accountList=[];vacationList=[];summaryList=[];$('workspace').hidden=false;$('overview').hidden=true;document.body.classList.add('public-view');$('auth').hidden=false;$('logout').hidden=true;$('identity').textContent='';for(const id of ['metrics','forecast','pyramid','recommendations','notifications','accounts','transactions','flows','budgets','shocks','offers','projected-shocks','fraud','vacations','chargebacks','subscriptions','subscription-advice','inflation','summaries','scenario-result','integrations','account-form','transaction-form','flow-form','budget-form','shock-form','vacation-form','chargeback-form','privacy-form','scenario-form'])$(id).replaceChildren();$('summary-form').reset();if(audioUrl)URL.revokeObjectURL(audioUrl);audioUrl=null;delivered.clear();}
 for(const type of ['login'])$(type).onsubmit=e=>{e.preventDefault();const form=e.currentTarget;action(form.querySelector('button'),async()=>{const body=Object.fromEntries(new FormData(form));const result=await api('auth/'+type,'POST',body);resetDataset();token=result.access_token;email=result.email;isAdmin=result.role==='admin';updateDatasetAdminView();document.body.classList.remove('public-view');form.reset();$('identity').textContent=email;$('auth').hidden=true;$('workspace').hidden=false;$('logout').hidden=false;message('Loading your financial picture…');await load();message('Your data is up to date.');});};
-$('logout').onclick=signout;$('refresh').onclick=()=>action($('refresh'),async()=>{await load();message('Updated.');});$('bank-sync').onclick=()=>action($('bank-sync'),async()=>{await api('finance/banking/sync','POST');await load();message('Bank snapshots synchronized.');});$('cpi-refresh').onclick=()=>action($('cpi-refresh'),async()=>{await api('finance/inflation/refresh','POST');await load();message('Statistics Canada CPI retrieved.');});
+$('logout').onclick=signout;$('refresh').onclick=()=>action($('refresh'),async()=>{await load();$('status').replaceChildren();});$('bank-sync').onclick=()=>action($('bank-sync'),async()=>{await api('finance/banking/sync','POST');await load();message('Bank snapshots synchronized.');});$('cpi-refresh').onclick=()=>action($('cpi-refresh'),async()=>{await api('finance/inflation/refresh','POST');await load();message('Statistics Canada CPI retrieved.');});
 $('summary-form').onsubmit=e=>{e.preventDefault();action(e.currentTarget.querySelector('button'),async()=>{message('Generating verified summary…');await api('finance/summaries','POST',Object.fromEntries(new FormData($('summary-form'))));await load();message('Summary ready.');});};
 const delivered=new Set();$('push').onclick=()=>action($('push'),async()=>{if(!('Notification' in window))throw Error('This browser does not support device alerts. In-app alerts remain available.');const permission=await Notification.requestPermission();message(permission==='granted'?'Device alerts enabled while this dashboard is open.':'Device alerts were not enabled. In-app alerts remain available.');});
 setInterval(async()=>{if(!token)return;const activeToken=token;try{const fresh=await api('finance/dashboard');if(token!==activeToken)return;if('Notification' in window&&Notification.permission==='granted')for(const n of fresh.notifications)if(!n.read&&!delivered.has(n.id)){new Notification(n.title,{body:n.message});delivered.add(n.id);}}catch(error){message(error.message,true);}},60000);
@@ -112,12 +112,14 @@ function renderFinancialOverview(view, analysis=null) {
 }
 $('overview-personal').onclick=()=>{datasetUseOverview=false;if(data)renderFinancialOverview(data);};
 function resetDataset() {
+ if(typeof window.resetReferenceReview==='function')window.resetReferenceReview();
  datasetVersion++;datasetDetailVersion++;datasetOffset=0;datasetFilter='';datasetSelected=null;datasetUseOverview=false;
  $('financial-context-label').textContent='SEARCH BY SOURCE ACCOUNT ID';$('overview-personal').hidden=true;
  for(const id of ['dataset-status','dataset-metrics','dataset-archetypes','dataset-regions','dataset-accounts','dataset-pagination','dataset-account-metrics','dataset-account-fields','dataset-history','dataset-source-files','dataset-transactions','dataset-transaction-pagination'])$(id).replaceChildren();
  $('dataset-detail-panel').hidden=true;$('dataset-search').reset();
 }
 async function showDatasetAccount(id, updateOverview=datasetUseOverview) {
+ if(typeof window.resetReferenceReview==='function')window.resetReferenceReview();
  const activeToken=token, version=++datasetDetailVersion;datasetSelected=id;
  $('dataset-detail-panel').hidden=false;$('dataset-detail-title').textContent='Loading account '+id+'…';
  $('dataset-transactions').replaceChildren();$('dataset-transaction-pagination').replaceChildren();
@@ -135,6 +137,7 @@ async function showDatasetAccount(id, updateOverview=datasetUseOverview) {
   table('dataset-account-fields',Object.entries(a).map(([name,value])=>({name:name.replaceAll('_',' '),value})),[['Source field','name'],['Value','value']]);
   table('dataset-history',detail.months,[['Month','month'],['Money in',r=>sourceNumber(r.money_in)],['Money out',r=>sourceNumber(r.money_out)],['Household bills',r=>sourceNumber(r.household_bills)],['Insurance',r=>sourceNumber(r.insurance)],['Loan payments',r=>sourceNumber(r.loan_payments)],['Average daily balance',r=>sourceNumber(r.avg_daily_balance)],['Month-end balance',r=>sourceNumber(r.month_end_balance)]]);
   await loadDatasetTransactions(id);
+  if(token===activeToken&&version===datasetDetailVersion&&typeof window.loadReferenceReview==='function')await window.loadReferenceReview(id);
  } catch(error) {if(token===activeToken&&version===datasetDetailVersion){$('dataset-history').replaceChildren(el('p',error.message,'notice error'));if(updateOverview&&data){datasetUseOverview=false;renderFinancialOverview(data);}}}
 }
 function updateDatasetAdminView() {

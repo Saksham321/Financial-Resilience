@@ -64,6 +64,10 @@ For production, set a unique `SECRET_KEY`, `ENVIRONMENT=production`, `DEBUG=fals
 
 ## Audit evidence
 
+The latest [technical specification compliance review](docs/SPEC_COMPLIANCE_REVIEW.md) checks the newly supplied architecture document requirement by requirement and identifies remaining algorithm, API-contract, category, configuration, and live-integration gaps.
+
+The [supplied project comparison](docs/REFERENCE_PROJECT_COMPARISON.md) documents the new **Resilience toolkit** for selected source accounts, including benchmark values, shock controls, lending examples, predictive plans, subscriptions, inflation, fraud simulation, goal/backup plans and voice. [Exact calculation comparisons](docs/REFERENCE_PARITY_REPORT.json) cover seven reference accounts and 35 scenario combinations. Source search and admin-only lists retain their existing behavior.
+
 The latest [163-function inventory review](docs/FUNCTION_COVERAGE.md) maps the supplied function list to the grouped implementations and records remaining limits. Rebuild it with `node scripts/audit-functions.cjs`.
 
 Platform additions include a durable local transaction-event outbox consumed by the background worker, admin-only `GET /api/v1/system/metrics` (process-local request counts, durations, uptime), and owner-only `DELETE /api/v1/finance/summaries/{id}` (also removes audio). `SUMMARY_RETENTION_DAYS=0` disables automatic deletion; a positive value lets the worker delete generated summaries/audio older than that many days. Source financial records and audit/consent history are retained. `POST /api/v1/finance/summaries` also accepts an optional `scenario` with `amount` and `due_date` to generate verified hypothetical shock analysis and contingency steps without persisting obligations. Database/disk encryption, full retention policy, and live provider verification remain deployment gaps; see the inventory review.
